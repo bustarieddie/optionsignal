@@ -15,7 +15,7 @@ return new class extends Migration
             $table->string('rule_type', 20);
             // Which scoring component this rule maps to (ema_crossover, rsi, vwap, volume, htf, sr) — nullable for descriptive-only rules.
             $table->string('component', 30)->nullable();
-            $table->string('condition_key', 60);
+            $table->string('condition_key', 255);
             $table->string('operator', 10)->nullable();
             $table->string('value')->nullable();
             // Optional per-rule point override (else config/signals weight is used).

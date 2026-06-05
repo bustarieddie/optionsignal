@@ -18,9 +18,8 @@ class VssCeStrategySeeder extends Seeder
             ]
         );
 
-        if ($strategy->rules()->exists()) {
-            return;
-        }
+        // Rebuild rules each run so the set is always complete/idempotent.
+        $strategy->rules()->delete();
 
         $rules = [
             // BUY CALL
