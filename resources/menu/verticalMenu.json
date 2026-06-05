@@ -1,0 +1,117 @@
+{
+  "menu": [
+    {
+      "url": "dashboard",
+      "name": "Dashboard",
+      "icon": "menu-icon icon-base ri ri-dashboard-line",
+      "slug": "dashboard",
+      "permission": "view dashboard"
+    },
+    {
+      "menuHeader": "Trading"
+    },
+    {
+      "url": "signals",
+      "name": "Signals",
+      "icon": "menu-icon icon-base ri ri-flashlight-line",
+      "slug": "signals"
+    },
+    {
+      "url": "watchlist",
+      "name": "Watchlist",
+      "icon": "menu-icon icon-base ri ri-eye-line",
+      "slug": "watchlist",
+      "permission": "manage watchlist"
+    },
+    {
+      "url": "strategies",
+      "name": "Strategies",
+      "icon": "menu-icon icon-base ri ri-route-line",
+      "slug": "strategies",
+      "permission": "manage strategies"
+    },
+    {
+      "url": "trades",
+      "name": "Trade Journal",
+      "icon": "menu-icon icon-base ri ri-booklet-line",
+      "slug": "trades",
+      "permission": "manage trades"
+    },
+    {
+      "url": "backtests",
+      "name": "Backtesting",
+      "icon": "menu-icon icon-base ri ri-line-chart-line",
+      "slug": "backtests",
+      "permission": "manage backtests"
+    },
+    {
+      "url": "risk",
+      "name": "Risk Management",
+      "icon": "menu-icon icon-base ri ri-shield-check-line",
+      "slug": "risk",
+      "permission": "manage risk"
+    },
+    {
+      "menuHeader": "Administration"
+    },
+    {
+      "name": "Admin",
+      "icon": "menu-icon icon-base ri ri-admin-line",
+      "slug": "admin",
+      "permission": "access admin",
+      "submenu": [
+        {
+          "url": "admin/users",
+          "name": "Users",
+          "slug": "admin-users",
+          "permission": "manage users"
+        },
+        {
+          "url": "admin/webhooks",
+          "name": "Webhook Logs",
+          "slug": "admin-webhooks",
+          "permission": "view webhook logs"
+        },
+        {
+          "url": "admin/mcp-audit",
+          "name": "MCP Audit Logs",
+          "slug": "admin-mcp-audit",
+          "permission": "view mcp audit"
+        },
+        {
+          "url": "admin/performance",
+          "name": "Signal Performance",
+          "slug": "admin-performance",
+          "permission": "access admin"
+        },
+        {
+          "url": "admin/risk-defaults",
+          "name": "Risk Defaults",
+          "slug": "admin-risk-defaults",
+          "permission": "access admin"
+        }
+      ]
+    },
+    {
+      "menuHeader": "Account"
+    },
+    {
+      "url": "account/profile",
+      "name": "Profile",
+      "icon": "menu-icon icon-base ri ri-user-settings-line",
+      "slug": "account-profile"
+    },
+    {
+      "url": "account/api-tokens",
+      "name": "API Tokens",
+      "icon": "menu-icon icon-base ri ri-key-2-line",
+      "slug": "account-api-tokens"
+    },
+    {
+      "url": "pine-script",
+      "name": "Pine Script",
+      "icon": "menu-icon icon-base ri ri-code-s-slash-line",
+      "slug": "pine-script"
+    }
+  ]
+}

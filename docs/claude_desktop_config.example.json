@@ -1,0 +1,18 @@
+{
+  "//": "OptionSignal Pro MCP server for Claude Desktop.",
+  "//1": "Claude Desktop speaks stdio; mcp-remote proxies it to the app's HTTP MCP endpoint and injects the Sanctum bearer token.",
+  "//2": "Create a token under Account -> API Tokens with the 'mcp:read' ability (add 'mcp:write' only if you want the write tools), then paste it below.",
+  "//3": "The app must be running (composer run dev). Use your real host/port if not localhost:8000.",
+  "mcpServers": {
+    "optionsignal": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "http://localhost:8000/mcp/optionsignal",
+        "--header",
+        "Authorization: Bearer PASTE_YOUR_mcp_read_TOKEN_HERE"
+      ]
+    }
+  }
+}

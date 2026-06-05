@@ -1,0 +1,110 @@
+//@version=6
+// =============================================================================
+// OptionSignal Pro — TradingView alert emitter
+// EMA 9/21 + RSI/RSI-MA + VWAP + Volume + HTF trend → JSON webhook
+//
+// Emits a JSON body via alert() that matches the OptionSignal Pro webhook:
+//   POST /api/webhooks/tradingview
+// Set the alert to "Any alert() function call" and paste your webhook URL.
+//
+// Decision-support indicator only. Not financial advice. Non-repaint:
+// all decisions gated by barstate.isconfirmed; HTF referenced at [1].
+// =============================================================================
+
+indicator("OptionSignal Pro Emitter", shorttitle="OSP", overlay=true)
+
+// ---------------------------------------------------------------------------
+// Inputs
+// ---------------------------------------------------------------------------
+secret      = input.string("JIDp1LjW9uB6akHqxv0bRoVmyFNceY5PQdf3XlCT", "Webhook secret (must match .env TRADINGVIEW_WEBHOOK_SECRET)")
+stratName   = input.string("EMA_9_21_RSI", "Strategy name (must match a strategy in the app)")
+emaFastLen  = input.int(9,  "EMA Fast")
+emaSlowLen  = input.int(21, "EMA Slow")
+rsiLen      = input.int(14, "RSI Length")
+rsiMaLen    = input.int(14, "RSI MA Length")
+volLen      = input.int(20, "Volume MA Length")
+useHTF      = input.bool(true, "Require HTF confirmation")
+htfManual   = input.timeframe("60", "Higher timeframe")
+
+// ---------------------------------------------------------------------------
+// Indicators
+// ---------------------------------------------------------------------------
+ema9   = ta.ema(close, emaFastLen)
+ema21  = ta.ema(close, emaSlowLen)
+rsi    = ta.rsi(close, rsiLen)
+rsiMA  = ta.sma(rsi, rsiMaLen)
+vwap   = ta.vwap(hlc3)
+atr14  = ta.atr(14)
+volMA  = ta.sma(volume, volLen)
+
+// HTF trend (non-repaint: previous closed HTF bar)
+htfTF  = useHTF ? htfManual : timeframe.period
+[htfClose, htfEma9, htfEma21] = request.security(syminfo.tickerid, htfTF,
+     [close[1], ta.ema(close, emaFastLen)[1], ta.ema(close, emaSlowLen)[1]],
+     lookahead=barmerge.lookahead_off)
+htfBull = htfClose > htfEma21 and htfEma9 > htfEma21
+htfBear = htfClose < htfEma21 and htfEma9 < htfEma21
+htfTrend = htfBull ? "bullish" : htfBear ? "bearish" : "neutral"
+
+volStatus = volume > volMA ? "above_average" : "below_average"
+
+// ---------------------------------------------------------------------------
+// Signal conditions
+// ---------------------------------------------------------------------------
+emaCrossUp   = ta.crossover(ema9, ema21)
+emaCrossDn   = ta.crossunder(ema9, ema21)
+rsiUp        = ta.crossover(rsi, rsiMA)
+rsiDn        = ta.crossunder(rsi, rsiMA)
+
+// Speed vs reliability: bar-close (default, non-repaint) or intra-bar (faster, may repaint).
+fireIntrabar = input.bool(false, "Fire intra-bar (faster, may repaint)")
+confirmOk    = barstate.isconfirmed or fireIntrabar
+alertFreq    = fireIntrabar ? alert.freq_once_per_bar : alert.freq_once_per_bar_close
+
+// Fire on the bar the full bullish/bearish setup FIRST aligns (transition), not every bar.
+bullAligned = ema9 > ema21 and rsi > rsiMA and close > vwap and (not useHTF or htfBull)
+bearAligned = ema9 < ema21 and rsi < rsiMA and close < vwap and (not useHTF or htfBear)
+buyCall = bullAligned and not bullAligned[1] and confirmOk
+buyPut  = bearAligned and not bearAligned[1] and confirmOk
+exitSig = (rsiDn or emaCrossDn or ta.crossunder(close, ema21)) and confirmOk
+
+// ---------------------------------------------------------------------------
+// JSON builder — keys match App\Http\Requests\StoreWebhookRequest exactly
+// ---------------------------------------------------------------------------
+f_json(sig) =>
+    s = '{'
+    s := s + '"secret":"' + secret + '",'
+    s := s + '"ticker":"' + syminfo.ticker + '",'
+    s := s + '"timeframe":"' + timeframe.period + '",'
+    s := s + '"signal":"' + sig + '",'
+    s := s + '"price":' + str.tostring(close, format.mintick) + ','
+    s := s + '"strategy":"' + stratName + '",'
+    s := s + '"ema9":' + str.tostring(ema9, format.mintick) + ','
+    s := s + '"ema21":' + str.tostring(ema21, format.mintick) + ','
+    s := s + '"rsi":' + str.tostring(rsi, "#.##") + ','
+    s := s + '"rsi_ma":' + str.tostring(rsiMA, "#.##") + ','
+    s := s + '"vwap":' + str.tostring(vwap, format.mintick) + ','
+    s := s + '"atr":' + str.tostring(atr14, format.mintick) + ','
+    s := s + '"volume_status":"' + volStatus + '",'
+    s := s + '"htf_trend":"' + htfTrend + '",'
+    s := s + '"sr_clear":true,'
+    s := s + '"timestamp":"' + str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ssXXX", syminfo.timezone) + '"'
+    s := s + '}'
+    s
+
+if buyCall
+    alert(f_json("buy_call"), alertFreq)
+if buyPut
+    alert(f_json("buy_put"), alertFreq)
+if exitSig
+    alert(f_json("exit"), alertFreq)
+
+// ---------------------------------------------------------------------------
+// Visuals
+// ---------------------------------------------------------------------------
+plot(ema9,  "EMA 9",  color=color.new(color.green,  0))
+plot(ema21, "EMA 21", color=color.new(color.orange, 0))
+plot(vwap,  "VWAP",   color=color.new(color.blue,   0))
+plotshape(buyCall, "Buy Call", shape.triangleup,   location.belowbar, color.new(color.green, 0), size=size.small)
+plotshape(buyPut,  "Buy Put",  shape.triangledown, location.abovebar, color.new(color.red,   0), size=size.small)
+plotshape(exitSig, "Exit",     shape.xcross,       location.abovebar, color.new(color.gray,  0), size=size.tiny)

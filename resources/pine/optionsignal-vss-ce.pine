@@ -1,0 +1,121 @@
+//@version=6
+// =============================================================================
+// OptionSignal Pro — VSS + Chandelier Exit + RSI-MA
+// Entry trigger : Chandelier Exit flip (ATR trailing stop, the Buy/Sell signal)
+// Trend filter  : VSS multi-EMA stack 8 > 20 > 50, bias vs EMA 200 + Hi/Lo channel
+// Momentum      : RSI vs its moving average
+//
+// Approximates the chart's "CE" and "VSS" indicators with standard Pine.
+// Emits the OptionSignal Pro webhook JSON via alert() ("Any alert() function
+// call"). Decision-support only; not financial advice.
+// =============================================================================
+
+indicator("OptionSignal Pro — VSS+CE+RSI", shorttitle="OSP-VSS", overlay=true)
+
+// ---------------------------------------------------------------------------
+// Inputs
+// ---------------------------------------------------------------------------
+secret    = input.string("JIDp1LjW9uB6akHqxv0bRoVmyFNceY5PQdf3XlCT", "Webhook secret (match .env TRADINGVIEW_WEBHOOK_SECRET)")
+stratName = input.string("VSS Chandelier RSI-MA", "Strategy name (must match the app strategy)")
+ceLen     = input.int(22, "Chandelier ATR Length")
+ceMult    = input.float(3.0, "Chandelier ATR Multiplier")
+rsiLen    = input.int(14, "RSI Length")
+rsiMaLen  = input.int(14, "RSI MA Length")
+volLen    = input.int(20, "Volume MA Length")
+chanLen   = input.int(20, "VSS High/Low channel length")
+
+// ---------------------------------------------------------------------------
+// VSS — multi-EMA trend stack + High/Low channel
+// ---------------------------------------------------------------------------
+ema8   = ta.ema(close, 8)
+ema20  = ta.ema(close, 20)
+ema50  = ta.ema(close, 50)
+ema200 = ta.ema(close, 200)
+vssBull = ema8 > ema20 and ema20 > ema50 and close > ema200
+vssBear = ema8 < ema20 and ema20 < ema50 and close < ema200
+hiChan  = ta.highest(high, chanLen)
+loChan  = ta.lowest(low, chanLen)
+
+// ---------------------------------------------------------------------------
+// Chandelier Exit — ATR trailing stop that flips long/short
+// ---------------------------------------------------------------------------
+atr       = ceMult * ta.atr(ceLen)
+longStop  = ta.highest(close, ceLen) - atr
+longStop  := close[1] > nz(longStop[1]) ? math.max(longStop, nz(longStop[1])) : longStop
+shortStop = ta.lowest(close, ceLen) + atr
+shortStop := close[1] < nz(shortStop[1]) ? math.min(shortStop, nz(shortStop[1])) : shortStop
+var int ceDir = 1
+ceDir := close > shortStop[1] ? 1 : close < longStop[1] ? -1 : ceDir
+ceFlipLong  = ceDir == 1 and ceDir[1] == -1
+ceFlipShort = ceDir == -1 and ceDir[1] == 1
+
+// ---------------------------------------------------------------------------
+// Momentum + context
+// ---------------------------------------------------------------------------
+rsi   = ta.rsi(close, rsiLen)
+rsiMA = ta.sma(rsi, rsiMaLen)
+vwap  = ta.vwap(hlc3)
+atr14 = ta.atr(14)
+volMA = ta.sma(volume, volLen)
+volStatus = volume > volMA ? "above_average" : "below_average"
+htfTrend  = close > ema200 ? "bullish" : "bearish"   // VSS long-term bias as HTF proxy
+
+// ---------------------------------------------------------------------------
+// Signals — CE flip in the direction of the VSS trend, confirmed by RSI-MA
+// ---------------------------------------------------------------------------
+// Speed vs reliability: bar-close (default, non-repaint) or intra-bar (faster, may repaint).
+fireIntrabar = input.bool(false, "Fire intra-bar (faster, may repaint)")
+confirmOk    = barstate.isconfirmed or fireIntrabar
+alertFreq    = fireIntrabar ? alert.freq_once_per_bar : alert.freq_once_per_bar_close
+
+buyCall = ceFlipLong  and vssBull and rsi > rsiMA and confirmOk
+buyPut  = ceFlipShort and vssBear and rsi < rsiMA and confirmOk
+exitSig = (ceFlipShort or ceFlipLong or ta.cross(rsi, rsiMA)) and confirmOk
+
+// Clean level breakout of the VSS Hi/Lo channel lifts the grade to A+.
+srCallClear = close > nz(hiChan[1], close)
+srPutClear  = close < nz(loChan[1], close)
+
+// ---------------------------------------------------------------------------
+// JSON builder — keys match App\Http\Requests\StoreWebhookRequest.
+// VSS fast/slow EMAs map to the ema9/ema21 fields the scorer reads.
+// ---------------------------------------------------------------------------
+f_json(sig, sr) =>
+    s = '{'
+    s := s + '"secret":"' + secret + '",'
+    s := s + '"ticker":"' + syminfo.ticker + '",'
+    s := s + '"timeframe":"' + timeframe.period + '",'
+    s := s + '"signal":"' + sig + '",'
+    s := s + '"price":' + str.tostring(close, format.mintick) + ','
+    s := s + '"strategy":"' + stratName + '",'
+    s := s + '"ema9":' + str.tostring(ema8, format.mintick) + ','
+    s := s + '"ema21":' + str.tostring(ema20, format.mintick) + ','
+    s := s + '"rsi":' + str.tostring(rsi, "#.##") + ','
+    s := s + '"rsi_ma":' + str.tostring(rsiMA, "#.##") + ','
+    s := s + '"vwap":' + str.tostring(vwap, format.mintick) + ','
+    s := s + '"atr":' + str.tostring(atr14, format.mintick) + ','
+    s := s + '"volume_status":"' + volStatus + '",'
+    s := s + '"htf_trend":"' + htfTrend + '",'
+    s := s + '"sr_clear":' + (sr ? 'true' : 'false') + ','
+    s := s + '"timestamp":"' + str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ssXXX", syminfo.timezone) + '"'
+    s := s + '}'
+    s
+
+if buyCall
+    alert(f_json("buy_call", srCallClear), alertFreq)
+if buyPut
+    alert(f_json("buy_put", srPutClear), alertFreq)
+if exitSig and not buyCall and not buyPut
+    alert(f_json("exit", false), alertFreq)
+
+// ---------------------------------------------------------------------------
+// Visuals
+// ---------------------------------------------------------------------------
+plot(ema8,   "EMA 8",   color=color.new(color.green,  0))
+plot(ema20,  "EMA 20",  color=color.new(color.orange, 0))
+plot(ema50,  "EMA 50",  color=color.new(color.red,    0))
+plot(ema200, "EMA 200", color=color.new(color.gray,   0), linewidth=2)
+ceStop = ceDir == 1 ? longStop : shortStop
+plot(ceStop, "Chandelier Stop", color = ceDir == 1 ? color.new(color.teal, 0) : color.new(color.maroon, 0), style=plot.style_linebr, linewidth=2)
+plotshape(buyCall, "Buy Call", shape.triangleup,   location.belowbar, color.new(color.green, 0), size=size.small, text="CALL")
+plotshape(buyPut,  "Buy Put",  shape.triangledown, location.abovebar, color.new(color.red,   0), size=size.small, text="PUT")

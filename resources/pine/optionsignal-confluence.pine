@@ -1,0 +1,154 @@
+//@version=6
+// =============================================================================
+// OptionSignal Pro — Confluence emitter
+// Fires only when MULTIPLE systems agree (high-conviction):
+//   SuperTrend flip + EMA 9/21 + RSI/RSI-MA + VWAP + TTM Squeeze momentum
+//   + volume + higher-timeframe trend + opening-range breakout.
+//
+// Inspired by a multi-indicator NVDA setup. Proprietary scripts (LuxAlgo SMC,
+// SQZPRO, ICT, etc.) are approximated with standard Pine built-ins.
+//
+// Emits the OptionSignal Pro webhook JSON via alert() — set the alert to
+// "Any alert() function call". Decision-support only; not financial advice.
+// =============================================================================
+
+indicator("OptionSignal Pro — Confluence", shorttitle="OSP-CFL", overlay=true)
+
+// ---------------------------------------------------------------------------
+// Inputs
+// ---------------------------------------------------------------------------
+secret     = input.string("JIDp1LjW9uB6akHqxv0bRoVmyFNceY5PQdf3XlCT", "Webhook secret (match .env TRADINGVIEW_WEBHOOK_SECRET)")
+stratName  = input.string("Confluence ORB Squeeze", "Strategy name (must match the app strategy)")
+emaFastLen = input.int(9,  "EMA Fast")
+emaSlowLen = input.int(21, "EMA Slow")
+rsiLen     = input.int(14, "RSI Length")
+rsiMaLen   = input.int(14, "RSI MA Length")
+volLen     = input.int(20, "Volume MA Length")
+stFactor   = input.float(3.0, "SuperTrend Factor")
+stAtr      = input.int(10, "SuperTrend ATR")
+sqzLen     = input.int(20, "Squeeze BB/KC Length")
+htfTF      = input.timeframe("60", "Higher timeframe")
+
+// ---------------------------------------------------------------------------
+// Core indicators
+// ---------------------------------------------------------------------------
+ema9  = ta.ema(close, emaFastLen)
+ema21 = ta.ema(close, emaSlowLen)
+rsi   = ta.rsi(close, rsiLen)
+rsiMA = ta.sma(rsi, rsiMaLen)
+vwap  = ta.vwap(hlc3)
+atr14 = ta.atr(14)
+volMA = ta.sma(volume, volLen)
+volStatus = volume > volMA ? "above_average" : "below_average"
+
+// SuperTrend — the trend-flip "Buy/Sell" signal
+[stLine, stDir] = ta.supertrend(stFactor, stAtr)
+stBull = stDir < 0
+stBear = stDir > 0
+flipUp = stDir < 0 and stDir[1] > 0
+flipDn = stDir > 0 and stDir[1] < 0
+
+// TTM Squeeze + momentum (standard reproduction of SQZPRO)
+basis   = ta.sma(close, sqzLen)
+dev     = 2.0 * ta.stdev(close, sqzLen)
+upBB    = basis + dev
+loBB    = basis - dev
+rangeMa = ta.sma(ta.tr(true), sqzLen)
+upKC    = basis + rangeMa * 1.5
+loKC    = basis - rangeMa * 1.5
+sqzOn   = loBB > loKC and upBB < upKC
+mom     = ta.linreg(close - math.avg(math.avg(ta.highest(high, sqzLen), ta.lowest(low, sqzLen)), ta.sma(close, sqzLen)), sqzLen, 0)
+momBull = mom > 0 and mom >= mom[1]
+momBear = mom < 0 and mom <= mom[1]
+
+// Opening-range breakout (first regular-session bar = 09:30 on a 5m chart)
+var float orbHigh = na
+var float orbLow  = na
+if session.isfirstbar_regular
+    orbHigh := high
+    orbLow  := low
+aboveORB = not na(orbHigh) and close > orbHigh
+belowORB = not na(orbLow)  and close < orbLow
+
+// Premarket high/low (04:00–09:30 ET) — extra S/R levels
+isPm = not na(time(timeframe.period, "0400-0930", "America/New_York"))
+var float pmHigh = na
+var float pmLow  = na
+if isPm and not isPm[1]
+    pmHigh := high
+    pmLow  := low
+else if isPm
+    pmHigh := math.max(pmHigh, high)
+    pmLow  := math.min(pmLow, low)
+abovePM = not na(pmHigh) and close > pmHigh
+belowPM = not na(pmLow)  and close < pmLow
+
+// A clean level breakout = beyond the opening range OR the premarket extreme.
+srCallClear = aboveORB or abovePM
+srPutClear  = belowORB or belowPM
+
+// Higher-timeframe trend (non-repaint: previous closed HTF bar)
+[htfClose, htfEma21] = request.security(syminfo.tickerid, htfTF, [close[1], ta.ema(close, emaSlowLen)[1]], lookahead=barmerge.lookahead_off)
+htfBull  = htfClose > htfEma21
+htfBear  = htfClose < htfEma21
+htfTrend = htfBull ? "bullish" : htfBear ? "bearish" : "neutral"
+
+// ---------------------------------------------------------------------------
+// Confluence — every component must agree
+// ---------------------------------------------------------------------------
+// Core confluence (fires more often). A clean ORB/premarket breakout is NOT
+// required to enter — it instead lifts the grade to A+ via sr_clear.
+// Speed vs reliability: bar-close (default, non-repaint) or intra-bar (faster, may repaint).
+fireIntrabar = input.bool(false, "Fire intra-bar (faster, may repaint)")
+confirmOk    = barstate.isconfirmed or fireIntrabar
+alertFreq    = fireIntrabar ? alert.freq_once_per_bar : alert.freq_once_per_bar_close
+
+// Fire on the bar the full confluence FIRST aligns (transition), not every bar it holds.
+bullAligned = stBull and ema9 > ema21 and rsi > rsiMA and close > vwap and not sqzOn and momBull and volume > volMA and htfBull
+bearAligned = stBear and ema9 < ema21 and rsi < rsiMA and close < vwap and not sqzOn and momBear and volume > volMA and htfBear
+buyCall = bullAligned and not bullAligned[1] and confirmOk
+buyPut  = bearAligned and not bearAligned[1] and confirmOk
+exitSig = (flipDn or flipUp or ta.cross(rsi, rsiMA)) and confirmOk
+
+// ---------------------------------------------------------------------------
+// JSON builder — keys match App\Http\Requests\StoreWebhookRequest
+// ---------------------------------------------------------------------------
+f_json(sig, sr) =>
+    s = '{'
+    s := s + '"secret":"' + secret + '",'
+    s := s + '"ticker":"' + syminfo.ticker + '",'
+    s := s + '"timeframe":"' + timeframe.period + '",'
+    s := s + '"signal":"' + sig + '",'
+    s := s + '"price":' + str.tostring(close, format.mintick) + ','
+    s := s + '"strategy":"' + stratName + '",'
+    s := s + '"ema9":' + str.tostring(ema9, format.mintick) + ','
+    s := s + '"ema21":' + str.tostring(ema21, format.mintick) + ','
+    s := s + '"rsi":' + str.tostring(rsi, "#.##") + ','
+    s := s + '"rsi_ma":' + str.tostring(rsiMA, "#.##") + ','
+    s := s + '"vwap":' + str.tostring(vwap, format.mintick) + ','
+    s := s + '"atr":' + str.tostring(atr14, format.mintick) + ','
+    s := s + '"volume_status":"' + volStatus + '",'
+    s := s + '"htf_trend":"' + htfTrend + '",'
+    s := s + '"sr_clear":' + (sr ? 'true' : 'false') + ','
+    s := s + '"timestamp":"' + str.format_time(time_close, "yyyy-MM-dd'T'HH:mm:ssXXX", syminfo.timezone) + '"'
+    s := s + '}'
+    s
+
+if buyCall
+    alert(f_json("buy_call", srCallClear), alertFreq)
+if buyPut
+    alert(f_json("buy_put", srPutClear), alertFreq)
+if exitSig and not buyCall and not buyPut
+    alert(f_json("exit", false), alertFreq)
+
+// ---------------------------------------------------------------------------
+// Visuals
+// ---------------------------------------------------------------------------
+plot(ema9,  "EMA 9",  color=color.new(color.green,  0))
+plot(ema21, "EMA 21", color=color.new(color.orange, 0))
+plot(stLine, "SuperTrend", color = stBull ? color.new(color.teal, 0) : color.new(color.red, 0), style=plot.style_linebr, linewidth=2)
+plot(orbHigh, "ORB High", color=color.new(color.gray, 30), style=plot.style_linebr)
+plot(orbLow,  "ORB Low",  color=color.new(color.gray, 30), style=plot.style_linebr)
+bgcolor(sqzOn ? color.new(color.yellow, 90) : na, title="Squeeze on")
+plotshape(buyCall, "Buy Call", shape.triangleup,   location.belowbar, color.new(color.green, 0), size=size.small, text="CALL")
+plotshape(buyPut,  "Buy Put",  shape.triangledown, location.abovebar, color.new(color.red,   0), size=size.small, text="PUT")
