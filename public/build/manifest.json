@@ -27,8 +27,8 @@
       "_jquery-BQXThELV.js"
     ]
   },
-  "_osp-echo-Do4CQaaj.js": {
-    "file": "assets/osp-echo-Do4CQaaj.js",
+  "_osp-echo-BSFMSM-1.js": {
+    "file": "assets/osp-echo-BSFMSM-1.js",
     "name": "osp-echo",
     "imports": [
       "_pusher-C0_db1mZ.js"
@@ -887,18 +887,18 @@
     "isEntry": true
   },
   "resources/assets/js/osp-dashboard.js": {
-    "file": "assets/osp-dashboard-EKgWbkvz.js",
+    "file": "assets/osp-dashboard-DzNEmkPT.js",
     "name": "osp-dashboard",
     "src": "resources/assets/js/osp-dashboard.js",
     "isEntry": true,
     "imports": [
-      "_osp-echo-Do4CQaaj.js",
+      "_osp-echo-BSFMSM-1.js",
       "_pusher-C0_db1mZ.js",
       "__commonjsHelpers-D6-XlEtG.js"
     ]
   },
   "resources/assets/js/osp-echo.js": {
-    "file": "assets/osp-echo-CfqpG4qr.js",
+    "file": "assets/osp-echo-BcTD0LIN.js",
     "name": "osp-echo",
     "src": "resources/assets/js/osp-echo.js",
     "isEntry": true,
@@ -908,23 +908,23 @@
     ]
   },
   "resources/assets/js/osp-quotes.js": {
-    "file": "assets/osp-quotes-De7evEw5.js",
+    "file": "assets/osp-quotes-B53Xs0Vp.js",
     "name": "osp-quotes",
     "src": "resources/assets/js/osp-quotes.js",
     "isEntry": true,
     "imports": [
-      "_osp-echo-Do4CQaaj.js",
+      "_osp-echo-BSFMSM-1.js",
       "_pusher-C0_db1mZ.js",
       "__commonjsHelpers-D6-XlEtG.js"
     ]
   },
   "resources/assets/js/osp-signals-live.js": {
-    "file": "assets/osp-signals-live-BMgMOP-4.js",
+    "file": "assets/osp-signals-live-Dw5fd8io.js",
     "name": "osp-signals-live",
     "src": "resources/assets/js/osp-signals-live.js",
     "isEntry": true,
     "imports": [
-      "_osp-echo-Do4CQaaj.js",
+      "_osp-echo-BSFMSM-1.js",
       "_pusher-C0_db1mZ.js",
       "__commonjsHelpers-D6-XlEtG.js"
     ]

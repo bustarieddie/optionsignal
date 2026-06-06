@@ -1,1 +1,0 @@
-import{P as s,S as r}from"./pusher-C0_db1mZ.js";window.Pusher=s;window.Echo=new r({broadcaster:"reverb",key:"local-reverb-key",wsHost:"localhost",wsPort:"8080",wssPort:"8080",forceTLS:!1,enabledTransports:["ws","wss"]});
