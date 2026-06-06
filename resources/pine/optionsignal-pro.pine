@@ -16,7 +16,7 @@ indicator("OptionSignal Pro Emitter", shorttitle="OSP", overlay=true)
 // ---------------------------------------------------------------------------
 // Inputs
 // ---------------------------------------------------------------------------
-secret      = input.string("JIDp1LjW9uB6akHqxv0bRoVmyFNceY5PQdf3XlCT", "Webhook secret (must match .env TRADINGVIEW_WEBHOOK_SECRET)")
+secret      = input.string("", "Webhook secret (paste here — must match .env TRADINGVIEW_WEBHOOK_SECRET)", confirm=true)
 stratName   = input.string("EMA_9_21_RSI", "Strategy name (must match a strategy in the app)")
 emaFastLen  = input.int(9,  "EMA Fast")
 emaSlowLen  = input.int(21, "EMA Slow")

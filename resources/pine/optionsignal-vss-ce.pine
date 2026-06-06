@@ -15,7 +15,7 @@ indicator("OptionSignal Pro — VSS+CE+RSI", shorttitle="OSP-VSS", overlay=true)
 // ---------------------------------------------------------------------------
 // Inputs
 // ---------------------------------------------------------------------------
-secret    = input.string("JIDp1LjW9uB6akHqxv0bRoVmyFNceY5PQdf3XlCT", "Webhook secret (match .env TRADINGVIEW_WEBHOOK_SECRET)")
+secret    = input.string("", "Webhook secret (paste here — match .env TRADINGVIEW_WEBHOOK_SECRET)", confirm=true)
 stratName = input.string("VSS Chandelier RSI-MA", "Strategy name (must match the app strategy)")
 ceLen     = input.int(22, "Chandelier ATR Length")
 ceMult    = input.float(3.0, "Chandelier ATR Multiplier")

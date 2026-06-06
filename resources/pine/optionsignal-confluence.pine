@@ -17,7 +17,7 @@ indicator("OptionSignal Pro — Confluence", shorttitle="OSP-CFL", overlay=true)
 // ---------------------------------------------------------------------------
 // Inputs
 // ---------------------------------------------------------------------------
-secret     = input.string("JIDp1LjW9uB6akHqxv0bRoVmyFNceY5PQdf3XlCT", "Webhook secret (match .env TRADINGVIEW_WEBHOOK_SECRET)")
+secret     = input.string("", "Webhook secret (paste here — match .env TRADINGVIEW_WEBHOOK_SECRET)", confirm=true)
 stratName  = input.string("Confluence ORB Squeeze", "Strategy name (must match the app strategy)")
 emaFastLen = input.int(9,  "EMA Fast")
 emaSlowLen = input.int(21, "EMA Slow")
