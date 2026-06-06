@@ -60,15 +60,23 @@ volMA = ta.sma(volume, volLen)
 volStatus = volume > volMA ? "above_average" : "below_average"
 htfTrend  = close > ema200 ? "bullish" : "bearish"   // VSS long-term bias as HTF proxy
 
-// Relative Strength vs a benchmark (default QQQ) — leadership filter
-useRS      = input.bool(true, "Require relative strength vs benchmark")
-rsBenchSym = input.symbol("NASDAQ:QQQ", "RS benchmark")
+// Relative Strength vs benchmarks (QQQ + SPY) — leadership filter
+useRS      = input.bool(true, "Require relative strength leadership")
+rsRequire  = input.string("both", "RS leadership required", options=["both","QQQ only","SPY only","either"])
 rsLookback = input.int(20, "RS lookback (bars)")
-benchClose = request.security(rsBenchSym, timeframe.period, close, lookahead=barmerge.lookahead_off)
-rs         = benchClose != 0 ? close / benchClose : na
-rsRising   = not na(rs) and rs > rs[rsLookback]
-rsFalling  = not na(rs) and rs < rs[rsLookback]
-rsStatus   = rsRising ? "outperforming" : rsFalling ? "lagging" : "inline"
+qqqClose   = request.security("NASDAQ:QQQ", timeframe.period, close, lookahead=barmerge.lookahead_off)
+spyClose   = request.security("AMEX:SPY",   timeframe.period, close, lookahead=barmerge.lookahead_off)
+rsQ = qqqClose != 0 ? close / qqqClose : na
+rsS = spyClose != 0 ? close / spyClose : na
+chgQQQ = na(rsQ) or na(rsQ[rsLookback]) or rsQ[rsLookback] == 0 ? na : (rsQ / rsQ[rsLookback] - 1) * 100
+chgSPY = na(rsS) or na(rsS[rsLookback]) or rsS[rsLookback] == 0 ? na : (rsS / rsS[rsLookback] - 1) * 100
+qLead = not na(chgQQQ) and chgQQQ >= 0
+sLead = not na(chgSPY) and chgSPY >= 0
+qLag  = not na(chgQQQ) and chgQQQ < 0
+sLag  = not na(chgSPY) and chgSPY < 0
+rsBull = rsRequire == "QQQ only" ? qLead : rsRequire == "SPY only" ? sLead : rsRequire == "either" ? (qLead or sLead) : (qLead and sLead)
+rsBear = rsRequire == "QQQ only" ? qLag  : rsRequire == "SPY only" ? sLag  : rsRequire == "either" ? (qLag or sLag) : (qLag and sLag)
+rsStatus = qLead and sLead ? "leading_both" : qLag and sLag ? "lagging_both" : "mixed"
 
 // ---------------------------------------------------------------------------
 // Signals — CE flip in the direction of the VSS trend, confirmed by RSI-MA
@@ -78,8 +86,8 @@ fireIntrabar = input.bool(false, "Fire intra-bar (faster, may repaint)")
 confirmOk    = barstate.isconfirmed or fireIntrabar
 alertFreq    = fireIntrabar ? alert.freq_once_per_bar : alert.freq_once_per_bar_close
 
-buyCall = ceFlipLong  and vssBull and rsi > rsiMA and (not useRS or rsRising)  and confirmOk
-buyPut  = ceFlipShort and vssBear and rsi < rsiMA and (not useRS or rsFalling) and confirmOk
+buyCall = ceFlipLong  and vssBull and rsi > rsiMA and (not useRS or rsBull) and confirmOk
+buyPut  = ceFlipShort and vssBear and rsi < rsiMA and (not useRS or rsBear) and confirmOk
 exitSig = (ceFlipShort or ceFlipLong or ta.cross(rsi, rsiMA)) and confirmOk
 
 // Clean level breakout of the VSS Hi/Lo channel lifts the grade to A+.
@@ -136,18 +144,10 @@ plotshape(buyPut,  "Buy Put",  shape.triangledown, location.abovebar, color.new(
 // ---------------------------------------------------------------------------
 showRsBox = input.bool(true, "Show RS box", group="RS box")
 rsBoxPos  = input.string("top_right", "RS box position", options=["top_right","top_left","bottom_right","bottom_left"], group="RS box")
-qqqClose  = request.security("NASDAQ:QQQ", timeframe.period, close, lookahead=barmerge.lookahead_off)
-spyClose  = request.security("AMEX:SPY",   timeframe.period, close, lookahead=barmerge.lookahead_off)
-rsQ = qqqClose != 0 ? close / qqqClose : na
-rsS = spyClose != 0 ? close / spyClose : na
-chgQQQ = na(rsQ) or na(rsQ[rsLookback]) or rsQ[rsLookback] == 0 ? na : (rsQ / rsQ[rsLookback] - 1) * 100
-chgSPY = na(rsS) or na(rsS[rsLookback]) or rsS[rsLookback] == 0 ? na : (rsS / rsS[rsLookback] - 1) * 100
 f_rspos(p) => p == "top_left" ? position.top_left : p == "bottom_right" ? position.bottom_right : p == "bottom_left" ? position.bottom_left : position.top_right
 var table rsBox = table.new(position.top_right, 2, 3, border_width=1, border_color=color.new(color.gray, 50))
 if showRsBox and barstate.islast
     table.set_position(rsBox, f_rspos(rsBoxPos))
-    qLead = not na(chgQQQ) and chgQQQ >= 0
-    sLead = not na(chgSPY) and chgSPY >= 0
     qTxt = na(chgQQQ) ? "n/a" : (qLead ? "▲ LEAD " : "▼ LAG ") + str.tostring(chgQQQ, "#.##") + "%"
     sTxt = na(chgSPY) ? "n/a" : (sLead ? "▲ LEAD " : "▼ LAG ") + str.tostring(chgSPY, "#.##") + "%"
     qBg = na(chgQQQ) ? color.new(color.gray, 70) : (qLead ? color.new(color.green, 30) : color.new(color.red, 30))

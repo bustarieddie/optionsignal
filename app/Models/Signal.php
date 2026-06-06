@@ -16,7 +16,7 @@ class Signal extends Model
     protected $fillable = [
         'user_id', 'strategy_id', 'watchlist_id', 'tradingview_webhook_id',
         'ticker', 'timeframe', 'signal_type', 'price',
-        'ema9', 'ema21', 'rsi', 'rsi_ma', 'vwap', 'volume_status',
+        'ema9', 'ema21', 'rsi', 'rsi_ma', 'vwap', 'volume_status', 'rs_status',
         'atr', 'stop_loss', 'tp1', 'tp2', 'tp3',
         'grade', 'total_score', 'status', 'occurred_at',
     ];
@@ -73,6 +73,21 @@ class Signal extends Model
     public function screenshots(): MorphMany
     {
         return $this->morphMany(Screenshot::class, 'imageable');
+    }
+
+    /**
+     * Relative-strength badge for the UI: [badgeClass, shortLabel, tooltip].
+     * Handles both the combined (leading_both/lagging_both/mixed) and the
+     * legacy single-benchmark (outperforming/lagging/inline) vocabularies.
+     */
+    public function rsBadge(): ?array
+    {
+        return match ($this->rs_status) {
+            'leading_both', 'outperforming' => ['bg-label-success', 'RS ↑', 'Leading QQQ & SPY'],
+            'lagging_both', 'lagging' => ['bg-label-danger', 'RS ↓', 'Lagging QQQ & SPY'],
+            'mixed', 'inline' => ['bg-label-secondary', 'RS ~', 'Mixed vs QQQ / SPY'],
+            default => null,
+        };
     }
 
     /** Colour code used in the UI: green=call, red=put, grey=ignored, yellow=watch. */

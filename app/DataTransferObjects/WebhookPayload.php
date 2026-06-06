@@ -21,6 +21,7 @@ class WebhookPayload
         public readonly ?float $rsiMa,
         public readonly ?float $vwap,
         public readonly ?string $volumeStatus, // above_average | below_average
+        public readonly ?string $rsStatus,     // leading_both | lagging_both | mixed
         public readonly ?string $htfTrend,     // bullish | bearish | null
         public readonly ?bool $srClear,        // clean support/resistance
         public readonly ?float $atr,
@@ -50,6 +51,7 @@ class WebhookPayload
             rsiMa: isset($data['rsi_ma']) ? (float) $data['rsi_ma'] : null,
             vwap: isset($data['vwap']) ? (float) $data['vwap'] : null,
             volumeStatus: $data['volume_status'] ?? null,
+            rsStatus: $data['rs_status'] ?? null,
             htfTrend: $data['htf_trend'] ?? null,
             srClear: isset($data['sr_clear']) ? filter_var($data['sr_clear'], FILTER_VALIDATE_BOOL) : null,
             atr: isset($data['atr']) ? (float) $data['atr'] : null,

@@ -70,6 +70,11 @@ $tvInterval = in_array($signal->timeframe, ['3m', '5m', '15m'], true) ? str_repl
           <dt class="col-sm-4">RSI / RSI MA</dt><dd class="col-sm-8">{{ $signal->rsi }} / {{ $signal->rsi_ma }}</dd>
           <dt class="col-sm-4">VWAP</dt><dd class="col-sm-8">{{ $signal->vwap }}</dd>
           <dt class="col-sm-4">Volume</dt><dd class="col-sm-8">{{ $signal->volume_status }}</dd>
+          @php($rs = $signal->rsBadge())
+          @if ($rs)
+            <dt class="col-sm-4">Relative strength</dt>
+            <dd class="col-sm-8"><span class="badge {{ $rs[0] }}">{{ $rs[2] }}</span></dd>
+          @endif
           <dt class="col-sm-4">Strategy</dt><dd class="col-sm-8">{{ $signal->strategy?->name ?? '—' }}</dd>
           <dt class="col-sm-4">Occurred</dt><dd class="col-sm-8">{{ optional($signal->occurred_at)->toDayDateTimeString() }}</dd>
         </dl>

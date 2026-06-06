@@ -39,6 +39,7 @@ class SignalProcessed implements ShouldBroadcast
             'ticker' => $this->signal->ticker,
             'timeframe' => $this->signal->timeframe,
             'signal_type' => $this->signal->signal_type,
+            'rs_status' => $this->signal->rs_status,
             'grade' => $this->signal->grade,
             'total_score' => $this->signal->total_score,
             'price' => $this->signal->price,

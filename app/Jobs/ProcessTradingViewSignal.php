@@ -100,6 +100,7 @@ class ProcessTradingViewSignal implements ShouldQueue
                 'rsi_ma' => $payload->rsiMa,
                 'vwap' => $payload->vwap,
                 'volume_status' => $payload->volumeStatus,
+                'rs_status' => $payload->rsStatus,
                 'atr' => $payload->atr,
                 'stop_loss' => $lvl['stop_loss'] ?? null,
                 'tp1' => $lvl['tp1'] ?? null,

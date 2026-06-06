@@ -64,7 +64,11 @@ $sideBadge = fn ($s) => $s === 'buy_call' ? 'bg-label-success' : ($s === 'buy_pu
         @forelse ($signals as $signal)
           <tr>
             <td class="fw-medium">{{ $signal->ticker }}</td>
-            <td><span class="badge {{ $sideBadge($signal->signal_type) }}">{{ strtoupper(str_replace('buy_', '', $signal->signal_type)) }}</span></td>
+            <td>
+              <span class="badge {{ $sideBadge($signal->signal_type) }}">{{ strtoupper(str_replace('buy_', '', $signal->signal_type)) }}</span>
+              @php($rs = $signal->rsBadge())
+              @if ($rs)<span class="badge {{ $rs[0] }}" title="{{ $rs[2] }}">{{ $rs[1] }}</span>@endif
+            </td>
             <td>{{ $signal->timeframe }}</td>
             <td><span class="badge bg-label-{{ $gradeColors[$signal->grade] ?? 'secondary' }}">{{ $signal->grade }}</span></td>
             <td>{{ $signal->total_score }}</td>

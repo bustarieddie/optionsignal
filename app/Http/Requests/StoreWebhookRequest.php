@@ -41,6 +41,7 @@ class StoreWebhookRequest extends FormRequest
             'tp2' => ['nullable', 'numeric'],
             'tp3' => ['nullable', 'numeric'],
             'volume_status' => ['nullable', 'string', 'max:20'],
+            'rs_status' => ['nullable', 'string', 'max:20'],
             'htf_trend' => ['nullable', 'string', Rule::in(['bullish', 'bearish', 'neutral'])],
             'sr_clear' => ['nullable', 'boolean'],
             'timestamp' => ['nullable', 'string'],

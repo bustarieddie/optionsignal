@@ -14,6 +14,16 @@ function sideBadge(type) {
   return 'bg-label-warning';
 }
 
+function rsBadge(status) {
+  if (status === 'leading_both' || status === 'outperforming')
+    return ' <span class="badge bg-label-success" title="Leading QQQ &amp; SPY">RS ↑</span>';
+  if (status === 'lagging_both' || status === 'lagging')
+    return ' <span class="badge bg-label-danger" title="Lagging QQQ &amp; SPY">RS ↓</span>';
+  if (status === 'mixed' || status === 'inline')
+    return ' <span class="badge bg-label-secondary" title="Mixed vs QQQ / SPY">RS ~</span>';
+  return '';
+}
+
 function buildRow(s) {
   const side = (s.signal_type || '').replace('buy_', '').toUpperCase();
   const grade = s.grade || 'ignore';
@@ -22,7 +32,7 @@ function buildRow(s) {
   tr.className = 'table-active';
   tr.innerHTML =
     `<td class="fw-medium">${s.ticker}</td>` +
-    `<td><span class="badge ${sideBadge(s.signal_type)}">${side}</span></td>` +
+    `<td><span class="badge ${sideBadge(s.signal_type)}">${side}</span>${rsBadge(s.rs_status)}</td>` +
     `<td>${s.timeframe || ''}</td>` +
     `<td><span class="badge bg-label-${GRADE_COLOR[grade] || 'secondary'}">${grade}</span></td>` +
     `<td>${s.total_score ?? ''}</td>` +
