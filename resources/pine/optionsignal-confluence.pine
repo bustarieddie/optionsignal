@@ -163,3 +163,31 @@ plot(orbLow,  "ORB Low",  color=color.new(color.gray, 30), style=plot.style_line
 bgcolor(sqzOn ? color.new(color.yellow, 90) : na, title="Squeeze on")
 plotshape(buyCall, "Buy Call", shape.triangleup,   location.belowbar, color.new(color.green, 0), size=size.small, text="CALL")
 plotshape(buyPut,  "Buy Put",  shape.triangledown, location.abovebar, color.new(color.red,   0), size=size.small, text="PUT")
+
+// ---------------------------------------------------------------------------
+// Relative Strength box — % out/under-performance vs QQQ and SPY
+// ---------------------------------------------------------------------------
+showRsBox = input.bool(true, "Show RS box", group="RS box")
+rsBoxPos  = input.string("top_right", "RS box position", options=["top_right","top_left","bottom_right","bottom_left"], group="RS box")
+qqqClose  = request.security("NASDAQ:QQQ", timeframe.period, close, lookahead=barmerge.lookahead_off)
+spyClose  = request.security("AMEX:SPY",   timeframe.period, close, lookahead=barmerge.lookahead_off)
+rsQ = qqqClose != 0 ? close / qqqClose : na
+rsS = spyClose != 0 ? close / spyClose : na
+chgQQQ = na(rsQ) or na(rsQ[rsLookback]) or rsQ[rsLookback] == 0 ? na : (rsQ / rsQ[rsLookback] - 1) * 100
+chgSPY = na(rsS) or na(rsS[rsLookback]) or rsS[rsLookback] == 0 ? na : (rsS / rsS[rsLookback] - 1) * 100
+f_rspos(p) => p == "top_left" ? position.top_left : p == "bottom_right" ? position.bottom_right : p == "bottom_left" ? position.bottom_left : position.top_right
+var table rsBox = table.new(position.top_right, 2, 3, border_width=1, border_color=color.new(color.gray, 50))
+if showRsBox and barstate.islast
+    table.set_position(rsBox, f_rspos(rsBoxPos))
+    qLead = not na(chgQQQ) and chgQQQ >= 0
+    sLead = not na(chgSPY) and chgSPY >= 0
+    qTxt = na(chgQQQ) ? "n/a" : (qLead ? "▲ LEAD " : "▼ LAG ") + str.tostring(chgQQQ, "#.##") + "%"
+    sTxt = na(chgSPY) ? "n/a" : (sLead ? "▲ LEAD " : "▼ LAG ") + str.tostring(chgSPY, "#.##") + "%"
+    qBg = na(chgQQQ) ? color.new(color.gray, 70) : (qLead ? color.new(color.green, 30) : color.new(color.red, 30))
+    sBg = na(chgSPY) ? color.new(color.gray, 70) : (sLead ? color.new(color.green, 30) : color.new(color.red, 30))
+    table.cell(rsBox, 0, 0, "RS",  text_color=color.white, text_size=size.small, bgcolor=color.new(color.blue, 20))
+    table.cell(rsBox, 1, 0, str.tostring(rsLookback) + "-bar", text_color=color.white, text_size=size.small, bgcolor=color.new(color.blue, 20))
+    table.cell(rsBox, 0, 1, "QQQ", text_color=color.white, text_size=size.small, bgcolor=color.new(color.gray, 20))
+    table.cell(rsBox, 1, 1, qTxt,  text_color=color.white, text_size=size.small, bgcolor=qBg)
+    table.cell(rsBox, 0, 2, "SPY", text_color=color.white, text_size=size.small, bgcolor=color.new(color.gray, 20))
+    table.cell(rsBox, 1, 2, sTxt,  text_color=color.white, text_size=size.small, bgcolor=sBg)
