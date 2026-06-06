@@ -63,7 +63,7 @@ htfTrend  = close > ema200 ? "bullish" : "bearish"   // VSS long-term bias as HT
 // Relative Strength vs benchmarks (QQQ + SPY) — leadership filter
 useRS      = input.bool(true, "Require relative strength leadership")
 rsRequire  = input.string("QQQ only", "RS leadership required", options=["both","QQQ only","SPY only","either"])
-rsLookback = input.int(20, "RS lookback (bars)")
+rsLookback = input.int(14, "RS lookback (bars)")
 qqqClose   = request.security("NASDAQ:QQQ", timeframe.period, close, lookahead=barmerge.lookahead_off)
 spyClose   = request.security("AMEX:SPY",   timeframe.period, close, lookahead=barmerge.lookahead_off)
 rsQ = qqqClose != 0 ? close / qqqClose : na
