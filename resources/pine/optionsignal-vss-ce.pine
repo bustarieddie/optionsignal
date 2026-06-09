@@ -74,9 +74,15 @@ qLead = not na(chgQQQ) and chgQQQ >= 0
 sLead = not na(chgSPY) and chgSPY >= 0
 qLag  = not na(chgQQQ) and chgQQQ < 0
 sLag  = not na(chgSPY) and chgSPY < 0
-rsBull = rsRequire == "QQQ only" ? qLead : rsRequire == "SPY only" ? sLead : rsRequire == "either" ? (qLead or sLead) : (qLead and sLead)
-rsBear = rsRequire == "QQQ only" ? qLag  : rsRequire == "SPY only" ? sLag  : rsRequire == "either" ? (qLag or sLag) : (qLag and sLag)
-rsStatus = qLead and sLead ? "leading_both" : qLag and sLag ? "lagging_both" : "mixed"
+// Fail open: when the benchmark data needed for the chosen mode is unavailable
+// (e.g. a 24h instrument like NAS100USD while QQQ/SPY are closed) the RS filter
+// must NOT block entries — otherwise it silently kills every entry off-hours.
+qMissing = na(chgQQQ)
+sMissing = na(chgSPY)
+rsMissing = rsRequire == "QQQ only" ? qMissing : rsRequire == "SPY only" ? sMissing : rsRequire == "either" ? (qMissing and sMissing) : (qMissing or sMissing)
+rsBull = rsMissing ? true : (rsRequire == "QQQ only" ? qLead : rsRequire == "SPY only" ? sLead : rsRequire == "either" ? (qLead or sLead) : (qLead and sLead))
+rsBear = rsMissing ? true : (rsRequire == "QQQ only" ? qLag  : rsRequire == "SPY only" ? sLag  : rsRequire == "either" ? (qLag or sLag) : (qLag and sLag))
+rsStatus = rsMissing ? "unavailable" : (qLead and sLead ? "leading_both" : qLag and sLag ? "lagging_both" : "mixed")
 
 // ---------------------------------------------------------------------------
 // Signals — CE flip in the direction of the VSS trend, confirmed by RSI-MA
