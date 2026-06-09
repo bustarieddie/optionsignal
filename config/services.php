@@ -38,6 +38,11 @@ return [
     'tradingview' => [
         // Shared secret TradingView must include inside the webhook JSON body.
         'webhook_secret' => env('TRADINGVIEW_WEBHOOK_SECRET'),
+
+        // Log level for the inbound webhook audit line. Defaults to `warning` so
+        // it shows up under a production LOG_LEVEL=warning; lower to `info`/`debug`
+        // to quiet it once things are confirmed working.
+        'webhook_log_level' => env('TRADINGVIEW_WEBHOOK_LOG_LEVEL', 'warning'),
     ],
 
     'telegram' => [
