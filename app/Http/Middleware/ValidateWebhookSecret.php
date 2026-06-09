@@ -32,7 +32,10 @@ class ValidateWebhookSecret
         $valid = $expected !== '' && hash_equals($expected, $provided);
 
         // Inbound webhook audit — helps diagnose alerts that don't show up.
-        \Illuminate\Support\Facades\Log::info('TradingView webhook received', [
+        // Logged at `warning` by default so it surfaces even when production runs
+        // at LOG_LEVEL=warning; override via TRADINGVIEW_WEBHOOK_LOG_LEVEL.
+        $level = (string) config('services.tradingview.webhook_log_level', 'warning');
+        \Illuminate\Support\Facades\Log::log($level, 'TradingView webhook received', [
             'ip' => $request->ip(),
             'ticker' => $request->input('ticker'),
             'signal' => $request->input('signal'),
