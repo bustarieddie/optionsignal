@@ -58,7 +58,7 @@ return [
     | Empty array = allow any uppercase 1-5 char ticker.
     |--------------------------------------------------------------------------
     */
-    'allowed_symbols' => ['NVDA', 'TSLA', 'META', 'AAPL', 'SPY', 'QQQ', 'AMD', 'MSFT', 'GOOG'],
+    'allowed_symbols' => ['NVDA', 'TSLA', 'META', 'AAPL', 'SPY', 'QQQ', 'AMD', 'MSFT', 'GOOG', 'MU', 'NAS100USD'],
 
     // Accepted timeframes for incoming signals.
     'timeframes' => ['3m', '5m', '15m', '1h'],
