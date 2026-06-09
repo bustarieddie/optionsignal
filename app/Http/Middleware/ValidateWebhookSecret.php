@@ -31,6 +31,15 @@ class ValidateWebhookSecret
         $provided = (string) $request->input('secret', '');
         $valid = $expected !== '' && hash_equals($expected, $provided);
 
+        // Pinpoint *why* a request was rejected so blank-secret alerts (a common
+        // cause of "alert fired but no signal") are obvious in the logs/response.
+        $reason = match (true) {
+            $valid => 'ok',
+            $expected === '' => 'server_secret_not_configured',
+            $provided === '' => 'secret_missing_from_payload',
+            default => 'secret_mismatch',
+        };
+
         // Inbound webhook audit — helps diagnose alerts that don't show up.
         // Logged at `warning` by default so it surfaces even when production runs
         // at LOG_LEVEL=warning; override via TRADINGVIEW_WEBHOOK_LOG_LEVEL.
@@ -40,11 +49,18 @@ class ValidateWebhookSecret
             'ticker' => $request->input('ticker'),
             'signal' => $request->input('signal'),
             'secret_valid' => $valid,
+            'reason' => $reason,
             'has_body' => ! empty($request->all()),
         ]);
 
         if (! $valid) {
-            return response()->json(['message' => 'Invalid webhook secret.'], 401);
+            $message = match ($reason) {
+                'server_secret_not_configured' => 'Server webhook secret is not configured (set TRADINGVIEW_WEBHOOK_SECRET).',
+                'secret_missing_from_payload' => 'Webhook secret missing from payload — paste it into the Pine script "Webhook secret" input.',
+                default => 'Invalid webhook secret.',
+            };
+
+            return response()->json(['message' => $message], 401);
         }
 
         return $next($request);
