@@ -86,6 +86,7 @@ class Signal extends Model
             'leading_both', 'outperforming' => ['bg-label-success', 'RS ↑', 'Leading QQQ & SPY'],
             'lagging_both', 'lagging' => ['bg-label-danger', 'RS ↓', 'Lagging QQQ & SPY'],
             'mixed', 'inline' => ['bg-label-secondary', 'RS ~', 'Mixed vs QQQ / SPY'],
+            'unavailable' => ['bg-label-secondary', 'RS n/a', 'Benchmark data unavailable (RS filter skipped)'],
             default => null,
         };
     }
