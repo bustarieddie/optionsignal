@@ -46,6 +46,18 @@ app.include_router(webhook.router)
 app.include_router(admin.router)
 app.include_router(read.router)
 
+# Phase 5 — serve the static ops dashboard at /dashboard (read endpoints are same-origin).
+try:
+    from pathlib import Path
+
+    from fastapi.staticfiles import StaticFiles
+
+    _dash = Path(__file__).resolve().parents[2] / "dashboard"
+    if _dash.exists():
+        app.mount("/dashboard", StaticFiles(directory=str(_dash), html=True), name="dashboard")
+except Exception as e:  # pragma: no cover
+    log_event(log, "dashboard mount skipped", error=str(e))
+
 
 @app.get("/")
 async def root():

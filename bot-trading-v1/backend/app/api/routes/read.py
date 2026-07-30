@@ -32,11 +32,15 @@ async def positions(request: Request):
 
 
 @router.get("/signals")
-async def signals(request: Request):
-    # Placeholder read model — production reads signal_events from the DB.
-    return {"note": "reads signal_events from DB in production", "recent": []}
+async def signals(request: Request, limit: int = 25):
+    rt = request.app.state.runtime
+    return {
+        "recent": rt.events.recent_signals(limit),
+        "recent_rejections": rt.events.recent_rejections(limit),
+    }
 
 
 @router.get("/trades")
-async def trades(request: Request):
-    return {"note": "reads trades from DB in production", "recent": []}
+async def trades(request: Request, limit: int = 25):
+    rt = request.app.state.runtime
+    return {"recent": rt.events.recent_trades(limit)}

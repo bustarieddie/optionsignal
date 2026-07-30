@@ -119,8 +119,10 @@ docker compose up --build
 | Emergency stop-placement policy | ✅ Implemented |
 | Admin controls (kill-switch/pause/resume) | ✅ Implemented |
 | Unit/integration tests (sizing, risk, dedup, expiry, session, kill-switch) | ✅ Implemented |
+| Backtest analytics (§26 metrics) | ✅ Implemented + tested (profit factor, expectancy, drawdown, Sharpe/Sortino, breakdowns) |
+| Live read model (`/signals`, `/trades`) | ✅ In-memory event store wired into the pipeline |
+| Dashboard (Phase 5) | ✅ Responsive `dashboard/index.html` served at `/dashboard` — live-mode warning + risk controls |
 | Live broker integration (real venue) | ⛔ Intentionally a **template only** — must be wired per broker |
 | News calendar feed | 🟡 Interface + "unavailable" honest default; no bundled paid feed |
-| Dashboard | 🟡 JSON endpoints implemented; UI layout specified in docs |
 
 See each phase's "Known limitations" section at the end of the relevant doc.

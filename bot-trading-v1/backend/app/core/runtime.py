@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from app.brokers.base import BrokerAdapter
 from app.brokers.paper import PaperBroker
 from app.core.config import Settings, load_settings
+from app.core.event_store import EventStore
 from app.core.idempotency import DedupStore, InMemoryDedupStore, RedisDedupStore
 from app.core.security import AdminAuth, AuthConfig
 from app.core.states import StateMachine, SystemState
@@ -89,6 +90,7 @@ class Runtime:
     auth: AuthConfig
     admin: AdminAuth
     sm: StateMachine
+    events: EventStore = field(default_factory=EventStore)
     specs: dict[str, SymbolSpec] = field(default_factory=dict)
     paused_symbols: set = field(default_factory=set)
 
@@ -117,5 +119,6 @@ def build_runtime(settings: Settings | None = None) -> Runtime:
                         hmac_required=s.hmac_required, ip_allowlist=s.ip_allowlist),
         admin=AdminAuth(token=s.admin_token or "change-me"),
         sm=sm,
+        events=EventStore(),
         specs=specs,
     )

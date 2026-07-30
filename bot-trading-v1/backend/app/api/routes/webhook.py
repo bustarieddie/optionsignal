@@ -7,6 +7,7 @@ from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
 
 from app.core import reject_codes as rc
+from app.core.event_store import SignalRecord, TradeRecord
 from app.core.idempotency import signal_key
 from app.core.logging import get_logger, log_event
 from app.core.security import authenticate_webhook
@@ -63,10 +64,18 @@ async def tradingview(url_token: str, request: Request,
         signal_dev_atr=rt.settings.filters.get("signal_dev_atr", 0.25),
     )
     if reason:
+        rt.events.record_signal(SignalRecord(
+            signal_id=model.signal_id, symbol=model.symbol, side=model.side,
+            status="rejected", reason=reason, correlation_id=corr,
+            environment=rt.settings.environment))
         return _reject(200, reason, corr)
 
     # 6. Symbol paused? / entries allowed?
     if sig.symbol in rt.paused_symbols or not rt.sm.entries_allowed():
+        rt.events.record_signal(SignalRecord(
+            signal_id=sig.signal_id, symbol=sig.symbol, side=sig.side.value,
+            status="rejected", reason="REJECT_PAUSED", correlation_id=corr,
+            environment=rt.settings.environment))
         return _reject(200, "REJECT_PAUSED", corr)
 
     spec = rt.specs.get(sig.symbol)
@@ -80,6 +89,10 @@ async def tradingview(url_token: str, request: Request,
     )
     if not decision.approved:
         log_event(log, "risk rejected", correlation_id=corr, reason=decision.reason)
+        rt.events.record_signal(SignalRecord(
+            signal_id=sig.signal_id, symbol=sig.symbol, side=sig.side.value,
+            status="rejected", reason=decision.reason, correlation_id=corr,
+            environment=rt.settings.environment))
         return _reject(200, decision.reason, corr)
 
     # 8. Execute (paper by default) with emergency protection policy.
@@ -98,7 +111,18 @@ async def tradingview(url_token: str, request: Request,
             open_risk_percent=decision.order_intent.open_risk_percent,
             correlation_group=spec.correlation_group,
         ))
+        rt.events.record_trade(TradeRecord(
+            symbol=sig.symbol, side=sig.side.value, size=decision.order_intent.lots,
+            entry_price=sig.entry_price, stop_loss=sig.stop_loss, take_profit=sig.take_profit,
+            position_id=result.position_id,
+            open_risk_percent=decision.order_intent.open_risk_percent,
+            environment=rt.settings.environment, status="open"))
 
+    rt.events.record_signal(SignalRecord(
+        signal_id=sig.signal_id, symbol=sig.symbol, side=sig.side.value,
+        status="accepted" if result.ok else "execution_failed",
+        reason=None if result.ok else result.reason, correlation_id=corr,
+        environment=rt.settings.environment))
     log_event(log, "signal processed", correlation_id=corr, signal_id=sig.signal_id,
               approved=decision.approved, executed=result.ok, protected=result.protected)
     return JSONResponse(status_code=200, content={

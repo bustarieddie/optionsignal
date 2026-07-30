@@ -82,12 +82,47 @@ executor), `brokers/` (base interface, paper, mock, live_template), `api/routes/
 app layer needs `fastapi`/`pydantic`/`sqlalchemy` from `requirements.txt`.
 
 **Known limitations:** live broker is a **template only** (`NotImplementedError` by
-design); news provider defaults to `unavailable`; DB read endpoints for
-`/signals` and `/trades` are stubbed pending the persistence wiring.
+design); news provider defaults to `unavailable`.
 
-**Next:** Phase 4 (n8n) — see `n8n/README.md`; Phase 5 (dashboard) — endpoints
-exist (`/health`, `/positions`, `/admin/risk-status`), UI layout specified in
-`docs/../README` and §25 of the prompt.
+**Next:** Phase 5 dashboard + analytics (below).
+
+---
+
+## Phase 5 — Dashboard + analytics ✅
+
+**Files:** `dashboard/index.html` (self-contained responsive ops UI, served at
+`/dashboard`), `backend/app/services/analytics.py` (§26 metrics),
+`backend/app/core/event_store.py` (live read model for `/signals` `/trades`).
+
+**Dashboard shows:** bot state · environment · **live-mode warning banner** (red,
+pulsing, only when live is enabled) · broker/auth/news status · risk status
+(equity, open-risk %, trades/losses today, consecutive losses, daily/weekly P/L)
+· open positions · latest signals & rejection reasons · recent trades · admin
+**pause / resume / kill-switch** buttons (bearer-token gated). Polls the read
+endpoints every 5s; theme-aware (light/dark).
+
+**Analytics (§26):** net/gross P&L, profit factor, win/loss rate, avg win/loss,
+avg R, expectancy, max drawdown, max consecutive losses, Sharpe, Sortino, recovery
+factor, long/short + session + day-of-week breakdowns. Reports only — never
+optimises on net profit (§28).
+
+**Live read model:** an in-memory ring buffer records every accepted/rejected
+signal and executed trade so `/signals` and `/trades` return live data (the DB
+§22 tables remain the durable record).
+
+**Tests added (15):** `test_analytics.py` (metrics, drawdown, consec losses,
+infinite PF, breakdowns), `test_news.py` (honest `unavailable`, fail-safe block,
+blackout windows, major-event longer blackout, low-impact ignored),
+`test_event_store.py` (accepted vs rejected routing, newest-first, bounded buffer).
+**Total suite: 70 passing.**
+
+**Known limitations:** dashboard is an internal ops tool (no auth on read
+endpoints — deploy behind the reverse proxy / IP allow-list); analytics consumes
+closed trades supplied by the caller (feed it from `trades` in production).
+
+**Next:** Phase 6 deployment is documented in `docs/06-deployment.md`. Remaining
+optional work: real live broker adapter, a connected news feed, Alembic migration
+files generated from the models.
 
 ---
 
