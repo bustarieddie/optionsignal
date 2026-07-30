@@ -44,3 +44,9 @@ async def signals(request: Request, limit: int = 25):
 async def trades(request: Request, limit: int = 25):
     rt = request.app.state.runtime
     return {"recent": rt.events.recent_trades(limit)}
+
+
+@router.get("/notifications")
+async def notifications(request: Request, limit: int = 25):
+    rt = request.app.state.runtime
+    return {"recent": rt.notifier.recent(limit) if rt.notifier else []}

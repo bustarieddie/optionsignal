@@ -35,6 +35,8 @@ async def kill_switch(request: Request, authorization: str | None = Header(defau
     rt = _require_admin(request, authorization)
     rt.sm.transition(SystemState.EMERGENCY_STOP, "admin kill switch")
     corr = _audit(rt, "kill_switch")
+    if rt.notifier:
+        rt.notifier.notify("kill_switch", "KILL SWITCH activated — EMERGENCY_STOP")
     return {"state": rt.sm.state.value, "correlation_id": corr}
 
 
@@ -46,6 +48,8 @@ async def pause(request: Request, authorization: str | None = Header(default=Non
         rt.paused_symbols.add(symbol)
     else:
         rt.sm.transition(SystemState.PAUSED, "admin pause")
+    if rt.notifier:
+        rt.notifier.notify("paused", f"paused {symbol or 'ALL new entries'}")
     return {"state": rt.sm.state.value, "paused_symbols": sorted(rt.paused_symbols),
             "correlation_id": _audit(rt, "pause", symbol=symbol)}
 

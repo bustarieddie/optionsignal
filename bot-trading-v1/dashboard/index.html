@@ -112,6 +112,14 @@
       <tbody><tr><td colspan="9" class="muted">loading…</td></tr></tbody>
     </table></div>
   </section>
+
+  <section class="card wide">
+    <h2>Notifications</h2>
+    <div class="scroll"><table id="notifTable">
+      <thead><tr><th>Event</th><th>Message</th></tr></thead>
+      <tbody><tr><td colspan="2" class="muted">loading…</td></tr></tbody>
+    </table></div>
+  </section>
 </main>
 
 <footer>
@@ -167,6 +175,15 @@ async function refresh(){
        <td>${fmt(x.entry_price)}</td><td>${fmt(x.stop_loss)}</td><td>${fmt(x.take_profit)}</td>
        <td>${x.environment}</td><td>${x.status}</td></tr>`).join('')
       : '<tr><td colspan="9" class="muted">no trades yet</td></tr>';
+  }catch(e){}
+
+  try{
+    const nt = await getJSON('/notifications?limit=25');
+    const rows = (nt.recent||[]);
+    $('notifTable').querySelector('tbody').innerHTML = rows.length? rows.map(x=>
+      `<tr><td><span class="tag ${x.event==='kill_switch'||x.event==='order_rejected'||x.event==='risk_limit'?'t-rejected':'t-accepted'}">${x.event}</span></td>
+       <td class="muted">${x.message||''}</td></tr>`).join('')
+      : '<tr><td colspan="2" class="muted">no notifications</td></tr>';
   }catch(e){}
 
   const token = $('adminToken').value.trim();

@@ -159,6 +159,36 @@ bind to your chosen DB.
 
 ---
 
+## Follow-up 2 — Notifications · backtest import · reconciliation · integration ✅
+
+**Notifications (§24)** (`services/notifications.py`). Channel-agnostic dispatcher
+with dashboard/log (always on) + Telegram + n8n + email channels (network channels
+lazy-import and fail soft). Secrets scrubbed from every message. Event types map to
+config `notify_on` toggles. Wired into the pipeline: `order_placed`,
+`rejected_signal` / `risk_limit`, emergency `order_rejected`, admin `kill_switch`
+and `paused`, plus startup `broker_disconnected`. Exposed at `/notifications` and
+shown on the dashboard.
+
+**Backtest importer (§26)** (`services/backtest_import.py`). Parses a TradingView
+"List of Trades" CSV (Entry/Exit row pairing) or a generic one-row-per-trade CSV
+into `ClosedTrade`s for the analytics module. Handles `$`/comma formatting and
+explicit-R columns.
+
+**Startup reconciliation (§C.5/§31)** (`services/reconciliation.py`). Compares
+local vs broker positions, classifies `at_broker_not_local` / `local_not_at_broker`,
+and `build_runtime` auto-pauses any divergent symbol + notifies before READY.
+
+**End-to-end integration test** (`tests/test_webhook_integration.py`). FastAPI
+`TestClient` drives the real route: valid signal → accepted (+ appears in
+`/trades`, `/positions`), duplicate → idempotent, bad token/secret → 401, expired
+→ `REJECT_SIGNAL_EXPIRED`, malformed → 422, kill-switch → subsequent signal
+`REJECT_PAUSED`. Auto-skips if app-layer deps aren't installed.
+
+**Tests added (21):** notifications (5), backtest import (4), reconciliation (4),
+integration (8). **Total suite: 108 passing** (100 pure-stdlib + 8 HTTP integration).
+
+---
+
 ## Safety posture (all phases)
 
 Paper mode default · live disabled by default · global kill-switch · per-symbol

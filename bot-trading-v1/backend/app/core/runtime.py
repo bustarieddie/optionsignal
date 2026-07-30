@@ -18,6 +18,8 @@ from app.core.states import StateMachine, SystemState
 from app.schemas.domain import RiskLimits, RiskState, SymbolSpec
 from app.services.filters import build_session_windows
 from app.services.news import JsonFileNewsProvider, NullNewsProvider
+from app.services.notifications import NotificationDispatcher, build_dispatcher
+from app.services.reconciliation import reconcile
 
 
 def _spec_from_yaml(symbol: str, raw: dict, mapping: dict) -> SymbolSpec:
@@ -118,6 +120,7 @@ class Runtime:
     specs: dict[str, SymbolSpec] = field(default_factory=dict)
     session_windows: dict = field(default_factory=dict)
     news_provider: object = field(default_factory=NullNewsProvider)
+    notifier: NotificationDispatcher | None = None
     paused_symbols: set = field(default_factory=set)
 
     def live_enabled(self) -> bool:
@@ -139,7 +142,10 @@ def build_runtime(settings: Settings | None = None) -> Runtime:
         equity = broker.get_equity() or 10_000.0
     except Exception:
         equity = 10_000.0
-    return Runtime(
+
+    notifier = build_dispatcher(s)
+
+    rt = Runtime(
         settings=s,
         broker=broker,
         limits=_limits_from_yaml(s.risk),
@@ -153,4 +159,20 @@ def build_runtime(settings: Settings | None = None) -> Runtime:
         specs=specs,
         session_windows=build_session_windows(s.symbols, s.sessions),
         news_provider=_news_provider(s),
+        notifier=notifier,
     )
+
+    # Startup reconciliation (§C.5): compare local (empty on fresh boot) with the
+    # broker. Any position at the broker we don't track → pause that symbol and
+    # alert; never blindly adopt or re-open.
+    try:
+        recon = reconcile(rt.risk_state.open_positions, broker.get_open_positions())
+        if not recon.clean:
+            for sym in recon.divergent_symbols():
+                rt.paused_symbols.add(sym)
+            notifier.notify("broker_disconnected",
+                            f"reconciliation divergence on {sorted(recon.divergent_symbols())}")
+    except Exception:
+        pass
+
+    return rt

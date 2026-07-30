@@ -107,10 +107,13 @@ async def tradingview(url_token: str, request: Request,
             signal_id=sig.signal_id, symbol=sig.symbol, side=sig.side.value,
             status="rejected", reason=decision.reason, correlation_id=corr,
             environment=rt.settings.environment))
+        _notify(rt, "risk_limit" if _is_risk_limit(decision.reason) else "rejected_signal",
+                f"{sig.symbol} {sig.side.value} rejected: {decision.reason}")
         return _reject(200, decision.reason, corr)
 
     # 8. Execute (paper by default) with emergency protection policy.
-    result = execute(decision.order_intent, rt.broker)
+    result = execute(decision.order_intent, rt.broker,
+                     notifier=lambda m: _notify(rt, "order_rejected", m))
     if not result.ok and result.paused_symbol:
         rt.paused_symbols.add(result.paused_symbol)
 
@@ -131,6 +134,9 @@ async def tradingview(url_token: str, request: Request,
             position_id=result.position_id,
             open_risk_percent=decision.order_intent.open_risk_percent,
             environment=rt.settings.environment, status="open"))
+        _notify(rt, "order_placed",
+                f"{sig.symbol} {sig.side.value} {decision.order_intent.lots} lots @ "
+                f"{sig.entry_price} SL {sig.stop_loss} TP {sig.take_profit}")
 
     rt.events.record_signal(SignalRecord(
         signal_id=sig.signal_id, symbol=sig.symbol, side=sig.side.value,
@@ -146,6 +152,25 @@ async def tradingview(url_token: str, request: Request,
         "lots": decision.order_intent.lots,
         "correlation_id": corr,
     })
+
+
+_RISK_LIMIT_CODES = {
+    rc.REJECT_MAX_TRADES, rc.REJECT_MAX_DAILY_LOSSES, rc.REJECT_MAX_CONSEC_LOSSES,
+    rc.REJECT_DAILY_LOSS_LIMIT, rc.REJECT_WEEKLY_LOSS_LIMIT, rc.REJECT_MAX_OPEN_RISK,
+    rc.REJECT_CORRELATED_EXPOSURE,
+}
+
+
+def _is_risk_limit(reason: str | None) -> bool:
+    return reason in _RISK_LIMIT_CODES
+
+
+def _notify(rt, event: str, message: str) -> None:
+    if rt.notifier is not None:
+        try:
+            rt.notifier.notify(event, message)
+        except Exception:
+            pass
 
 
 def _safe_price(rt, symbol: str) -> float | None:

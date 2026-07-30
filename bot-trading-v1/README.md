@@ -126,5 +126,9 @@ docker compose up --build
 | Session + news filters wired into the live pipeline | ✅ Implemented + tested (F-SESS / F-NEWS) |
 | News calendar feed | ✅ File-based provider (`JsonFileNewsProvider`); honest `unavailable` until a feed is attached |
 | Database migrations | ✅ Alembic scaffolding wired to the models (`backend/migrations/`) |
+| Notifications (§24) | ✅ Dispatcher + dashboard/log/Telegram/n8n/email channels, wired to pipeline events |
+| Backtest CSV importer (§26) | ✅ TradingView + generic CSV → analytics, tested |
+| Startup broker reconciliation (§C.5/§31) | ✅ Implemented + tested; divergent symbols auto-paused |
+| End-to-end HTTP pipeline test | ✅ FastAPI TestClient covers auth→schema→dedup→validation→filters→risk→paper |
 
 See each phase's "Known limitations" section at the end of the relevant doc.

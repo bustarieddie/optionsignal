@@ -59,6 +59,7 @@ class Settings:
     strategy: dict = field(default_factory=dict)
     filters: dict = field(default_factory=dict)
     correlation: dict = field(default_factory=dict)
+    notifications: dict = field(default_factory=dict)
     symbols: dict = field(default_factory=dict)
     symbol_mapping: dict = field(default_factory=dict)
     sessions: dict = field(default_factory=dict)
@@ -93,6 +94,7 @@ def load_settings(config_dir: str | os.PathLike | None = None) -> Settings:
         s.strategy = data.get("strategy", {})
         s.filters = data.get("filters", {})
         s.correlation = data.get("correlation", {})
+        s.notifications = data.get("notifications", {})
     if syms.exists():
         data = yaml.safe_load(syms.read_text()) or {}
         s.symbols = data.get("symbols", {})
