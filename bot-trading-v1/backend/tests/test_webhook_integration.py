@@ -99,6 +99,20 @@ def test_malformed_rejected(client):
     assert r.status_code == 422
 
 
+def test_manage_tick_moves_breakeven(client):
+    # open a partial-mode position, then send a manage tick at +1R -> breakeven move
+    client.app.state.runtime.settings.strategy = {"exit_mode": "partial", "p1_r": 1.0, "be_r": 1.0, "p1_pct": 50}
+    r = client.post(f"/webhook/tradingview/{TOKEN}", json=_payload(signal_id="ITEST-MANAGE"))
+    assert r.json()["status"] == "accepted"
+    pid = r.json()["position_id"]
+    hdr = {"Authorization": "Bearer change-me"}
+    # entry 2400, stop 2396 -> 1R at 2404
+    m = client.post("/admin/manage-tick", params={"symbol": "XAUUSD", "price": 2404.0, "atr": 2.0}, headers=hdr)
+    assert m.status_code == 200
+    results = m.json()["results"]
+    assert any(res["position_id"] == pid and "breakeven" in res["applied"] for res in results)
+
+
 def test_kill_switch_then_signal_paused(client):
     # need admin token; default is 'change-me' when ADMIN_TOKEN unset
     hdr = {"Authorization": "Bearer change-me"}

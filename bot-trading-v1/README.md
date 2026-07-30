@@ -130,5 +130,6 @@ docker compose up --build
 | Backtest CSV importer (§26) | ✅ TradingView + generic CSV → analytics, tested |
 | Startup broker reconciliation (§C.5/§31) | ✅ Implemented + tested; divergent symbols auto-paused |
 | End-to-end HTTP pipeline test | ✅ FastAPI TestClient covers auth→schema→dedup→validation→filters→risk→paper |
+| Position management (§9) | ✅ Breakeven / partial / ATR trailing / structure / time exits; `/admin/manage-tick` |
 
 See each phase's "Known limitations" section at the end of the relevant doc.

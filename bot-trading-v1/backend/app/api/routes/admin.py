@@ -78,6 +78,39 @@ async def close_position(request: Request, position_id: str,
             "correlation_id": _audit(rt, "close_position", position_id=position_id)}
 
 
+@router.post("/manage-tick")
+async def manage_tick(request: Request, symbol: str, price: float, atr: float = 0.0,
+                      advance_bar: bool = False,
+                      authorization: str | None = Header(default=None)):
+    """Run the position-management engine (rulebook §9) for a symbol's open
+    position at the given price. Drive this from a bar-close / price loop or a
+    scheduled job. Returns the actions applied and any closures."""
+    rt = _require_admin(request, authorization)
+    from app.services.management import apply_actions, exit_config_from, plan_management
+
+    cfg = exit_config_from(rt.settings.strategy)
+    notify = (lambda e, m: rt.notifier.notify(e, m)) if rt.notifier else None
+    out = []
+    for pid, mp in list(rt.managed.items()):
+        pos = next((p for p in rt.broker.get_open_positions() if p.position_id == pid), None)
+        if pos is None or pos.symbol != symbol:
+            continue
+        if advance_bar:
+            mp.bars_open += 1
+        actions = plan_management(mp, price, atr, cfg)
+        applied = apply_actions(rt.broker, mp, actions, notifier=notify)
+        # Sync local state if the position fully closed.
+        still_open = any(p.position_id == pid for p in rt.broker.get_open_positions())
+        if not still_open:
+            rt.managed.pop(pid, None)
+            rt.risk_state.open_positions = [
+                p for p in rt.risk_state.open_positions if p.symbol != symbol
+            ]
+        out.append({"position_id": pid, "applied": applied, "closed": not still_open})
+    return {"symbol": symbol, "results": out,
+            "correlation_id": _audit(rt, "manage_tick", symbol=symbol, price=price)}
+
+
 @router.get("/risk-status")
 async def risk_status(request: Request, authorization: str | None = Header(default=None)):
     rt = _require_admin(request, authorization)

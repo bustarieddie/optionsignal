@@ -134,6 +134,13 @@ async def tradingview(url_token: str, request: Request,
             position_id=result.position_id,
             open_risk_percent=decision.order_intent.open_risk_percent,
             environment=rt.settings.environment, status="open"))
+        # Track a ManagedPosition so the management engine can run breakeven /
+        # partial / trailing / time exits against it (rulebook §9).
+        from app.services.management import ManagedPosition
+        rt.managed[result.position_id] = ManagedPosition(
+            position_id=result.position_id, side=sig.side, entry=sig.entry_price,
+            initial_stop=sig.stop_loss, current_stop=sig.stop_loss,
+            size=decision.order_intent.lots)
         _notify(rt, "order_placed",
                 f"{sig.symbol} {sig.side.value} {decision.order_intent.lots} lots @ "
                 f"{sig.entry_price} SL {sig.stop_loss} TP {sig.take_profit}")

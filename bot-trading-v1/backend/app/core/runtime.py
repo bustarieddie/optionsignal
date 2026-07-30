@@ -121,6 +121,7 @@ class Runtime:
     session_windows: dict = field(default_factory=dict)
     news_provider: object = field(default_factory=NullNewsProvider)
     notifier: NotificationDispatcher | None = None
+    managed: dict = field(default_factory=dict)   # position_id -> ManagedPosition
     paused_symbols: set = field(default_factory=set)
 
     def live_enabled(self) -> bool:

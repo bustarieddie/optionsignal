@@ -34,6 +34,18 @@ def test_paper_close_realizes_pnl():
     assert b.get_account().equity > 10_000  # profit realized
 
 
+def test_paper_partial_close_keeps_position():
+    b = _paper()
+    b.connect()
+    r = b.place_market_order("XAUUSD", Side.BUY, 1.0, client_order_id="x")
+    b.set_price("XAUUSD", 2410.0)
+    partial = b.close_position(r.order_id, lots=0.5)
+    assert partial.ok
+    pos = b.get_open_positions()[0]
+    assert pos.size == 0.5                      # half remains open
+    assert b.get_account().equity > 10_000      # partial profit realized
+
+
 def test_paper_disconnected_rejects():
     b = _paper()  # not connected
     r = b.place_market_order("XAUUSD", Side.BUY, 0.1, client_order_id="x")

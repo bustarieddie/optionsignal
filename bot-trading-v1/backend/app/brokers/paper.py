@@ -112,13 +112,19 @@ class PaperBroker(BrokerAdapter):
         return OrderResult(True, position_id)
 
     def close_position(self, position_id, lots=None) -> OrderResult:
-        pos = self._positions.pop(position_id, None)
+        pos = self._positions.get(position_id)
         if not pos:
             return OrderResult(False, position_id, reason="no_position")
         price = self.get_latest_price(pos.symbol)
-        pnl = (price - pos.entry_price) * pos.side.sign * pos.size
+        # Partial close: reduce size and realize proportional PnL; full otherwise.
+        close_lots = pos.size if (lots is None or lots >= pos.size) else lots
+        pnl = (price - pos.entry_price) * pos.side.sign * close_lots
         self._equity += pnl
         self._balance += pnl
+        if close_lots >= pos.size:
+            del self._positions[position_id]
+        else:
+            pos.size -= close_lots
         return OrderResult(True, position_id, fill_price=price)
 
     def get_order_status(self, order_id: str) -> str:

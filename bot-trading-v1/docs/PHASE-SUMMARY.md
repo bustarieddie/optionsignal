@@ -189,6 +189,34 @@ integration (8). **Total suite: 108 passing** (100 pure-stdlib + 8 HTTP integrat
 
 ---
 
+## Follow-up 3 — Position management engine ✅
+
+**Files:** `services/management.py`, `/admin/manage-tick` endpoint, `managed`
+tracking on the runtime.
+
+Implements rulebook §9 (X-1..X-5) as a pure planner + a broker-driving applier:
+- **partial** — close `p1_pct` at `p1_r` R, move stop to breakeven after `be_r` R,
+  remainder runs to `reward_risk` R.
+- **atr_trail** — after `trail_activate_r` R, trail the stop by `trail_atr_mult ×
+  ATR`; stops only ever move in the risk-reducing direction (never widen on a pullback).
+- **structure_exit** — event-driven close on an opposite 5M CHoCH / HTF invalidation.
+- **time_exit (X-5)** — close after `max_trade_bars` with no meaningful progress
+  (never reached `p1_r`).
+
+A `ManagedPosition` is created for every protected entry; `POST /admin/manage-tick`
+(admin-gated) runs the planner for a symbol at a given price/ATR, applies moves/
+closes via the broker, notifies (`breakeven` / `partial_profit` / exits), and syncs
+local risk state on full close. Drive it from a bar-close/price loop or scheduled job.
+
+Also fixed the paper engine to support **partial closes** (reduce size + realize
+proportional PnL) so partial-profit management is exercised end-to-end.
+
+**Tests added (14):** `test_management.py` (12 — each exit mode, idempotency,
+favorable-only trailing, short side, applier) + paper partial-close + a manage-tick
+integration test. **Total suite: 122 passing.**
+
+---
+
 ## Safety posture (all phases)
 
 Paper mode default · live disabled by default · global kill-switch · per-symbol
