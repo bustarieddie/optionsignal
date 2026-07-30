@@ -100,7 +100,8 @@ strategy:
 
 filters:
   use_session_filter: true
-  use_news_filter: true           # if no verified feed → status 'unavailable' → block (fail-safe)
+  use_news_filter: true           # if no verified feed → status 'unavailable'
+  news_fail_safe_block: true      # 'unavailable' → block (safe). false = allow-with-warning
   news_before_min: 30
   news_after_min: 30
   news_major_before_min: 60       # FOMC / NFP

@@ -14,6 +14,7 @@ from app.core.security import authenticate_webhook
 from app.schemas.webhook import TradingViewWebhook
 from app.services import risk_engine
 from app.services.executor import execute
+from app.services.filters import check_news, check_session
 from app.services.validation import validate_signal
 
 router = APIRouter()
@@ -77,6 +78,19 @@ async def tradingview(url_token: str, request: Request,
             status="rejected", reason="REJECT_PAUSED", correlation_id=corr,
             environment=rt.settings.environment))
         return _reject(200, "REJECT_PAUSED", corr)
+
+    # 6b. Session + news filters (rulebook §B.10, F-SESS / F-NEWS).
+    filt = (
+        check_session(sig.symbol, sig.bar_time, rt.session_windows,
+                      enabled=rt.settings.filters.get("use_session_filter", True))
+        or check_news(sig.symbol, sig.bar_time, rt.news_provider, rt.settings.filters)
+    )
+    if filt:
+        rt.events.record_signal(SignalRecord(
+            signal_id=sig.signal_id, symbol=sig.symbol, side=sig.side.value,
+            status="rejected", reason=filt, correlation_id=corr,
+            environment=rt.settings.environment))
+        return _reject(200, filt, corr)
 
     spec = rt.specs.get(sig.symbol)
     if spec is None:

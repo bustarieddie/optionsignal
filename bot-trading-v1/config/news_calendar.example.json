@@ -1,0 +1,9 @@
+[
+  {"name": "US CPI (YoY)",            "at": "2026-08-12T12:30:00Z", "impact": "high", "major": false},
+  {"name": "FOMC Rate Decision",      "at": "2026-09-16T18:00:00Z", "impact": "high", "major": true},
+  {"name": "FOMC Press Conference",   "at": "2026-09-16T18:30:00Z", "impact": "high", "major": true},
+  {"name": "US Non-Farm Payrolls",    "at": "2026-09-04T12:30:00Z", "impact": "high", "major": true},
+  {"name": "US Core PCE (MoM)",       "at": "2026-08-28T12:30:00Z", "impact": "high", "major": false},
+  {"name": "US GDP (Advance)",        "at": "2026-07-30T12:30:00Z", "impact": "high", "major": false},
+  {"name": "US Unemployment Claims",  "at": "2026-08-07T12:30:00Z", "impact": "high", "major": false}
+]

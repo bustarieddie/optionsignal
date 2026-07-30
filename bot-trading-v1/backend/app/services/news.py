@@ -60,6 +60,66 @@ class StaticNewsProvider:
         return self._events
 
 
+def parse_calendar(items: list[dict]) -> list[NewsEvent]:
+    """Parse a list of {name, at, impact, major} dicts into NewsEvents.
+
+    Calendar file schema (JSON array), operator-maintained or exported from any
+    provider you trust. `at` is ISO-8601 (UTC recommended):
+
+        [{"name": "US CPI", "at": "2026-08-12T12:30:00Z", "impact": "high",
+          "major": false}, ...]
+    """
+    events: list[NewsEvent] = []
+    for it in items:
+        raw = str(it["at"]).replace("Z", "+00:00")
+        dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        events.append(NewsEvent(
+            name=str(it.get("name", "event")),
+            at=dt,
+            impact=str(it.get("impact", "high")).lower(),
+            major=bool(it.get("major", False)),
+        ))
+    return events
+
+
+class JsonFileNewsProvider:
+    """Real, honest feed: an operator-maintained JSON calendar file on disk.
+
+    This is a *verified* source (you control it), so ``available()`` is True once
+    the file loads. It is the recommended way to activate news protection without
+    a paid live-calendar subscription. Reload by calling ``load()`` again (e.g. on
+    a schedule) after refreshing the file.
+    """
+
+    def __init__(self, path: str):
+        self._path = path
+        self._events: list[NewsEvent] = []
+        self._loaded = False
+        self.load()
+
+    def load(self) -> bool:
+        import json
+        import os
+        if not self._path or not os.path.exists(self._path):
+            self._loaded = False
+            return False
+        try:
+            with open(self._path, "r", encoding="utf-8") as fh:
+                self._events = parse_calendar(json.load(fh))
+            self._loaded = True
+        except Exception:
+            self._loaded = False
+        return self._loaded
+
+    def available(self) -> bool:
+        return self._loaded
+
+    def upcoming(self, symbol: str, around: datetime) -> list[NewsEvent]:
+        return self._events
+
+
 def evaluate_news(
     *,
     provider: NewsProvider,

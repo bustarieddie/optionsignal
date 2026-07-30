@@ -44,6 +44,15 @@ class Settings:
     redis_url: str = field(default_factory=lambda: os.environ.get("REDIS_URL", ""))
     signal_dedup_ttl: int = field(default_factory=lambda: int(os.environ.get("SIGNAL_DEDUP_TTL", "3600")))
 
+    # --- news feed (optional; blank => honest 'unavailable') ---
+    news_calendar_file: str = field(default_factory=lambda: os.environ.get("NEWS_CALENDAR_FILE", ""))
+
+    # --- live broker selection ---
+    broker_kind: str = field(default_factory=lambda: os.environ.get("BROKER_KIND", "paper"))
+    broker_api_token: str = field(default_factory=lambda: os.environ.get("BROKER_API_TOKEN", ""))
+    broker_account_id: str = field(default_factory=lambda: os.environ.get("BROKER_ACCOUNT_ID", ""))
+    broker_env: str = field(default_factory=lambda: os.environ.get("BROKER_ENV", "practice"))
+
     # --- YAML-loaded blocks ---
     system: dict = field(default_factory=dict)
     risk: dict = field(default_factory=dict)

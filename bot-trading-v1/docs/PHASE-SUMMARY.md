@@ -120,9 +120,42 @@ blackout windows, major-event longer blackout, low-impact ignored),
 endpoints — deploy behind the reverse proxy / IP allow-list); analytics consumes
 closed trades supplied by the caller (feed it from `trades` in production).
 
-**Next:** Phase 6 deployment is documented in `docs/06-deployment.md`. Remaining
-optional work: real live broker adapter, a connected news feed, Alembic migration
-files generated from the models.
+**Next:** Phase 6 deployment is documented in `docs/06-deployment.md`. See the
+follow-up phase below for the live adapter, news feed and migrations.
+
+---
+
+## Follow-up — Live adapter · news feed · filters · migrations ✅
+
+**A. Session + news filters wired into the live pipeline** (`services/filters.py`).
+The webhook pipeline now applies F-SESS (timezone/DST-aware session windows built
+per symbol from config) and F-NEWS between validation and risk, recording
+`REJECT_SESSION` / `REJECT_NEWS_WINDOW` with reasons. A real, honest news source is
+available: `JsonFileNewsProvider` loads an operator-maintained calendar
+(`config/news_calendar.example.json`); set `NEWS_CALENDAR_FILE` to activate it.
+With no file the status stays `unavailable` and (default) blocks fail-safe.
+
+**B. Concrete live broker — OANDA v20** (`brokers/oanda.py`). A faithful adapter
+against OANDA's documented v20 REST API (account summary, pricing, market/stop/
+limit orders, STOP_LOSS/TAKE_PROFIT on open trades, openTrades, close). Pure
+translation/parse helpers are unit-tested; the full order→protect→close flow is
+tested via an injected fake HTTP client (no network, no `httpx` needed for tests).
+Selected **only** when `env=live` + LIVE_* gates pass + `BROKER_KIND=oanda`; the
+executor's emergency policy still guards a failed protective stop.
+
+**C. Alembic migrations** (`backend/alembic.ini`, `backend/migrations/`). `env.py`
+targets `app.db.models.Base.metadata` and reads `DATABASE_URL` from the env, so
+`alembic revision --autogenerate` produces an initial migration that matches all
+§22 tables. `compare_type=True`. See `migrations/README.md`.
+
+**Tests added (17):** `test_oanda.py` (helpers + full flow via fake client),
+`test_filters.py` (session windows + buffers, session/news gating). **Total suite:
+87 passing.**
+
+**Known limitations:** OANDA credentials/instrument specs must be confirmed per
+account before live use; the news calendar is only as good as the file you
+maintain; migrations are generated at deploy time (not committed here) so they
+bind to your chosen DB.
 
 ---
 

@@ -122,7 +122,9 @@ docker compose up --build
 | Backtest analytics (§26 metrics) | ✅ Implemented + tested (profit factor, expectancy, drawdown, Sharpe/Sortino, breakdowns) |
 | Live read model (`/signals`, `/trades`) | ✅ In-memory event store wired into the pipeline |
 | Dashboard (Phase 5) | ✅ Responsive `dashboard/index.html` served at `/dashboard` — live-mode warning + risk controls |
-| Live broker integration (real venue) | ⛔ Intentionally a **template only** — must be wired per broker |
-| News calendar feed | 🟡 Interface + "unavailable" honest default; no bundled paid feed |
+| Live broker integration | ✅ Concrete **OANDA v20** adapter (+ generic template); selected only when fully opted in |
+| Session + news filters wired into the live pipeline | ✅ Implemented + tested (F-SESS / F-NEWS) |
+| News calendar feed | ✅ File-based provider (`JsonFileNewsProvider`); honest `unavailable` until a feed is attached |
+| Database migrations | ✅ Alembic scaffolding wired to the models (`backend/migrations/`) |
 
 See each phase's "Known limitations" section at the end of the relevant doc.

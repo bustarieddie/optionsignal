@@ -16,6 +16,8 @@ from app.core.idempotency import DedupStore, InMemoryDedupStore, RedisDedupStore
 from app.core.security import AdminAuth, AuthConfig
 from app.core.states import StateMachine, SystemState
 from app.schemas.domain import RiskLimits, RiskState, SymbolSpec
+from app.services.filters import build_session_windows
+from app.services.news import JsonFileNewsProvider, NullNewsProvider
 
 
 def _spec_from_yaml(symbol: str, raw: dict, mapping: dict) -> SymbolSpec:
@@ -58,7 +60,21 @@ def _limits_from_yaml(risk: dict) -> RiskLimits:
 
 
 def _build_broker(settings: Settings) -> BrokerAdapter:
-    # Live template is NOT auto-selected. Live requires an explicit real adapter.
+    # A real live adapter is selected ONLY when the operator has fully opted in:
+    # env=live + LIVE flags satisfied + BROKER_KIND names a real adapter.
+    if settings.broker_kind == "oanda" and settings.environment == "live" and settings.live_ready():
+        from app.brokers.oanda import OandaBroker  # lazy: needs httpx
+        b = OandaBroker(
+            api_token=settings.broker_api_token,
+            account_id=settings.broker_account_id,
+            practice=(settings.broker_env != "live"),
+            symbol_mapping=settings.symbol_mapping,
+            units_per_lot={s: v.get("contract_size", 1) for s, v in settings.symbols.items()},
+        )
+        b.connect()
+        return b
+
+    # Default: paper engine (safe). Live template stays unselected by design.
     prices = {s: 0.0 for s in settings.symbols}
     b = PaperBroker(
         starting_equity=float(settings.system.get("starting_equity", 10_000)),
@@ -68,6 +84,14 @@ def _build_broker(settings: Settings) -> BrokerAdapter:
     )
     b.connect()
     return b
+
+
+def _news_provider(settings: Settings):
+    if settings.news_calendar_file:
+        p = JsonFileNewsProvider(settings.news_calendar_file)
+        if p.available():
+            return p
+    return NullNewsProvider()
 
 
 def _dedup(settings: Settings) -> DedupStore:
@@ -92,6 +116,8 @@ class Runtime:
     sm: StateMachine
     events: EventStore = field(default_factory=EventStore)
     specs: dict[str, SymbolSpec] = field(default_factory=dict)
+    session_windows: dict = field(default_factory=dict)
+    news_provider: object = field(default_factory=NullNewsProvider)
     paused_symbols: set = field(default_factory=set)
 
     def live_enabled(self) -> bool:
@@ -109,11 +135,15 @@ def build_runtime(settings: Settings | None = None) -> Runtime:
         sm.transition(SystemState.PAPER_MODE if s.environment != "live" else SystemState.READY,
                       f"env={s.environment}")
         sm.transition(SystemState.READY, "startup complete")
+    try:
+        equity = broker.get_equity() or 10_000.0
+    except Exception:
+        equity = 10_000.0
     return Runtime(
         settings=s,
         broker=broker,
         limits=_limits_from_yaml(s.risk),
-        risk_state=RiskState(equity=broker.get_equity() or 10_000.0),
+        risk_state=RiskState(equity=equity),
         dedup=_dedup(s),
         auth=AuthConfig(webhook_secret=s.webhook_secret, url_token=s.url_token,
                         hmac_required=s.hmac_required, ip_allowlist=s.ip_allowlist),
@@ -121,4 +151,6 @@ def build_runtime(settings: Settings | None = None) -> Runtime:
         sm=sm,
         events=EventStore(),
         specs=specs,
+        session_windows=build_session_windows(s.symbols, s.sessions),
+        news_provider=_news_provider(s),
     )

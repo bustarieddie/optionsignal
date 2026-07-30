@@ -73,5 +73,26 @@ your-host {
 
 ## Going live (do not skip)
 Backtest → in-sample → out-of-sample → walk-forward → Monte Carlo → **paper** → small-risk live.
-Only then set `LIVE_TRADING_ENABLED=true` **and** `LIVE_CONFIRMATION_PHRASE=<your value>` **and**
-implement a real `brokers/live_*.py` adapter. Never go backtest → full-size live.
+Only then enable live. Never go backtest → full-size live.
+
+### Enabling the OANDA v20 live adapter (example)
+A concrete, faithful OANDA adapter ships in `backend/app/brokers/oanda.py`. To use it:
+
+1. Confirm each instrument's contract/units with your OANDA account (`XAU_USD`,
+   `NAS100_USD`, `US30_USD`, `SPX500_USD`) and set `contract_size` in `symbols.yaml`.
+2. Run migrations against your production DB (`migrations/README.md`).
+3. Set **all** of these (all four are required — any missing ⇒ `REJECT_LIVE_TRADING_DISABLED`):
+   ```
+   ENVIRONMENT=live
+   LIVE_TRADING_ENABLED=true
+   LIVE_CONFIRMATION_PHRASE=<your value>   # must equal LIVE_CONFIRMATION_EXPECTED
+   BROKER_KIND=oanda
+   BROKER_ENV=practice                     # start on fxpractice, not fxtrade
+   BROKER_API_TOKEN=<oanda token, trading scope only>
+   BROKER_ACCOUNT_ID=<oanda account id>
+   ```
+4. Start on `BROKER_ENV=practice` (OANDA demo) first; only switch to `live` after a
+   clean paper + practice run. Use a small `risk_per_trade_percent` for initial live validation.
+
+For any other venue (MT5, cTrader, IBKR…), copy `brokers/live_template.py` and implement
+the interface the same way — the executor and emergency policy are broker-agnostic.
