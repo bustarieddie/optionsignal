@@ -1,0 +1,132 @@
+# =============================================================================
+# BOT TRADING v1.0 — system configuration (example)
+# Copy to config.yaml. Secrets do NOT go here — they come from environment vars.
+# All values are initial ENGINEERING defaults, not proven-optimal parameters.
+# =============================================================================
+
+system:
+  name: BOT_TRADING_V1
+  strategy_id: MTF_GOLD_INDEX_V1
+  timezone: Asia/Kuching          # daily reset + display timezone (DST-aware)
+  week_start: Monday
+  environment: paper              # backtest | paper | live
+  live_trading_enabled: false     # HARD off by default (also gated by env var)
+
+risk:
+  risk_per_trade_percent: 0.5     # 0.10 – 1.00
+  risk_hard_max_percent: 1.0      # sizing may never exceed this
+  max_open_risk_percent: 1.5
+  max_index_group_risk_percent: 1.0
+  max_daily_loss_percent: 2.0
+  max_weekly_loss_percent: 5.0
+  max_trades_per_day: 3
+  max_losing_trades_per_day: 2
+  max_consecutive_losses: 3
+  one_trade_per_symbol: true
+  one_signal_per_candle: true
+  # Forbidden strategies — present so they are explicit and audited as OFF.
+  allow_martingale: false
+  allow_grid: false
+  allow_averaging_down: false
+  allow_risk_escalation_after_loss: false
+
+strategy:
+  direction_timeframe: "240"      # 4H
+  trend_timeframe: "60"           # 1H
+  pullback_timeframe: "15"        # 15M
+  entry_timeframe: "5"            # 5M
+
+  # --- 4H direction ---
+  d_ema_fast: 50
+  d_ema_slow: 200
+  d_ema_min_gap_atr: 0.10
+  slope_lookback: 3
+  pivot_left: 3
+  pivot_right: 3
+  use_adx_filter: true
+  adx_period: 14
+  min_adx: 20
+
+  # --- 1H trend ---
+  t_ema_fast: 20
+  t_ema_slow: 50
+  ext_atr_mult: 1.5               # extension filter
+
+  # --- 15M pullback ---
+  rsi_len: 14
+  rsi_buy_min: 35
+  rsi_buy_max: 50
+  rsi_sell_min: 50
+  rsi_sell_max: 65
+  use_fib: false
+  fib_low: 0.382
+  fib_high: 0.618
+  pullback_max_atr: 2.0
+  setup_expiry_bars: 12           # in 15M candles
+
+  # --- 5M entry ---
+  entry_mode: retest              # breakout | retest | stop
+  retest_max_bars: 6
+  stop_offset_atr: 0.05
+  trigger_max_atr: 2.0            # oversized-candle guard
+  min_confirmations: 0
+  vol_len: 20
+  confirmations:
+    engulfing: false
+    rejection: false
+    volume_above_avg: false
+    rsi_cross_50: false
+    ema_cross: false
+    retest_confirm: false
+
+  # --- stop loss ---
+  stop_method: structural         # structural | atr | trigger_candle
+  sl_buffer_atr: 0.20
+  atr_stop_mult: 1.5
+  max_stop_atr: 3.0
+
+  # --- exits ---
+  exit_mode: fixed_rr             # fixed_rr | partial | atr_trail | structure_exit
+  reward_risk: 2.0
+  p1_pct: 50
+  p1_r: 1.0
+  be_r: 1.0
+  trail_activate_r: 1.0
+  trail_atr_mult: 1.5
+  max_trade_bars: 48              # 5M time-exit review
+
+  # --- ATR period (all TFs) ---
+  atr_period: 14
+
+filters:
+  use_session_filter: true
+  use_news_filter: true           # if no verified feed → status 'unavailable'
+  news_fail_safe_block: true      # 'unavailable' → block (safe). false = allow-with-warning
+  news_before_min: 30
+  news_after_min: 30
+  news_major_before_min: 60       # FOMC / NFP
+  news_major_after_min: 60
+  signal_dev_atr: 0.25            # max entry deviation vs latest price
+  signal_max_skew_sec: 120        # timestamp skew tolerance
+
+correlation:
+  groups:
+    indices: [NAS100, US30, SPX500]
+  # Gold is intentionally NOT in a group unless you add it here.
+
+notifications:
+  channels: [dashboard]           # dashboard | telegram | email | n8n
+  notify_on:
+    valid_signal: true
+    rejected_signal: true
+    order_placed: true
+    order_rejected: true
+    stop_hit: true
+    tp_hit: true
+    partial_profit: true
+    breakeven: true
+    risk_limit: true
+    broker_disconnected: true
+    paused: true
+    kill_switch: true
+    daily_summary: true

@@ -1,0 +1,113 @@
+# =============================================================================
+# BOT TRADING v1.0 — per-symbol presets + broker symbol mapping (example)
+# Contract/tick/lot values are BROKER-SPECIFIC placeholders. Confirm each with
+# your broker's contract specifications before enabling live trading.
+# =============================================================================
+
+# Broker symbol mapping — the strategy uses the canonical key; the adapter maps
+# it to whatever name your broker uses. Configure per broker.
+symbol_mapping:
+  XAUUSD: [XAUUSD, "XAUUSD.a", GOLD, "XAU/USD"]
+  NAS100: [NAS100, USTEC, US100, NDX100]
+  US30:   [US30, DJ30, "US30.cash", DOW]
+  SPX500: [SPX500, US500, SPX, "SPX500.cash"]
+
+symbols:
+
+  XAUUSD:
+    enabled: true
+    correlation_group: null        # gold treated separately by default
+    sessions: [london, new_york, london_ny_overlap]
+    # --- execution filters ---
+    max_spread: 0.35               # price units
+    slippage_allowance: 0.05
+    min_stop_distance: 0.50        # price units (also respect broker stop level)
+    max_stop_atr: 3.0
+    atr_stop_mult: 1.5
+    min_atr: 0.30                  # F-VOLLO
+    max_atr: 12.0                  # F-VOLHI
+    max_trades_per_day: 3
+    # --- contract spec (CONFIRM WITH BROKER) ---
+    contract_size: 100             # oz per 1.0 lot (typical)
+    tick_size: 0.01
+    tick_value: 1.0                # account-ccy value of one tick per 1.0 lot
+    min_lot: 0.01
+    max_lot: 20.0
+    lot_step: 0.01
+    est_commission_per_unit: 0.0
+    quote_currency: USD
+
+  NAS100:
+    enabled: true
+    correlation_group: indices
+    sessions: [new_york]
+    pre_market: false
+    avoid_first_minutes: 0         # optional opening-volatility filter
+    avoid_last_minutes: 5
+    max_spread: 2.5
+    slippage_allowance: 0.5
+    min_stop_distance: 5.0
+    max_stop_atr: 3.0
+    atr_stop_mult: 1.5
+    min_atr: 3.0
+    max_atr: 120.0
+    max_trades_per_day: 3
+    contract_size: 1
+    tick_size: 0.1
+    tick_value: 0.1
+    min_lot: 0.1
+    max_lot: 50.0
+    lot_step: 0.1
+    est_commission_per_unit: 0.0
+    quote_currency: USD
+
+  US30:
+    enabled: true
+    correlation_group: indices
+    sessions: [new_york]
+    avoid_last_minutes: 5
+    max_spread: 4.0
+    slippage_allowance: 1.0
+    min_stop_distance: 10.0
+    max_stop_atr: 3.0
+    atr_stop_mult: 1.5
+    min_atr: 8.0
+    max_atr: 300.0
+    max_trades_per_day: 3
+    contract_size: 1
+    tick_size: 1.0
+    tick_value: 0.1
+    min_lot: 0.1
+    max_lot: 50.0
+    lot_step: 0.1
+    est_commission_per_unit: 0.0
+    quote_currency: USD
+
+  SPX500:
+    enabled: true
+    correlation_group: indices
+    sessions: [new_york]
+    avoid_last_minutes: 5
+    max_spread: 0.8
+    slippage_allowance: 0.2
+    min_stop_distance: 1.5
+    max_stop_atr: 3.0
+    atr_stop_mult: 1.5
+    min_atr: 1.0
+    max_atr: 60.0
+    max_trades_per_day: 3
+    contract_size: 1
+    tick_size: 0.1
+    tick_value: 0.1
+    min_lot: 0.1
+    max_lot: 50.0
+    lot_step: 0.1
+    est_commission_per_unit: 0.0
+    quote_currency: USD
+
+# Session definitions (UTC windows; the engine converts using system.timezone and
+# applies DST via the tz database — see backend/app/services/sessions.py).
+sessions:
+  london:            { start: "07:00", end: "16:00", tz: "Europe/London" }
+  new_york:          { start: "09:30", end: "16:00", tz: "America/New_York" }
+  london_ny_overlap: { start: "13:30", end: "16:00", tz: "America/New_York" }

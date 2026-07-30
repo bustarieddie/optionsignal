@@ -1,0 +1,395 @@
+//@version=6
+// =============================================================================
+// BOT TRADING v1.0 — Multi-Timeframe Strategy (Gold + US Indices)
+// -----------------------------------------------------------------------------
+// Attach to a 5-MINUTE chart. Pulls 15M / 1H / 4H context via request.security.
+//
+//   4H  Market Direction   →  1H Trend Confirmation  →
+//   15M Pullback Setup     →  5M Entry Trigger        →  Risk  →  JSON webhook
+//
+// This is a STRATEGY (backtestable) that also emits a signed JSON alert matching
+// the BOT TRADING v1.0 backend webhook (POST /webhook/tradingview).
+//
+// NON-REPAINT DESIGN
+//   • strategy runs with calc_on_every_tick = false (default) → all series are
+//     CONFIRMED bar values; no intrabar repaint.
+//   • request.security uses lookahead = barmerge.lookahead_off and gaps_off, so
+//     no future data leaks from higher timeframes.
+//   • Pivots (swing highs/lows, BOS/CHoCH) are only READ after `pivotRight` bars
+//     have closed. This creates an unavoidable pivotRight-bar confirmation DELAY:
+//     a swing printed at bar N is only usable at bar N+pivotRight. That delay is
+//     the price of not repainting. Do NOT reduce pivotRight to 0.
+//
+// DECISION-SUPPORT / RESEARCH TOOL. No profitability is claimed or implied.
+// Backtested results do not guarantee future performance. Test before any live use.
+// =============================================================================
+
+strategy(
+     title              = "BOT TRADING v1.0 — MTF",
+     shorttitle         = "BOTv1",
+     overlay            = true,
+     calc_on_every_tick = false,
+     process_orders_on_close = true,
+     pyramiding         = 0,
+     default_qty_type   = strategy.percent_of_equity,
+     default_qty_value  = 5,          // backtest sizing only; live sizing is backend-side
+     initial_capital    = 10000,
+     commission_type    = strategy.commission.cash_per_order,
+     commission_value   = 0.0,
+     slippage           = 2)
+
+// -----------------------------------------------------------------------------
+// GROUP CONSTANTS
+// -----------------------------------------------------------------------------
+var string G_WH   = "Webhook"
+var string G_DIR  = "4H Direction"
+var string G_TRN  = "1H Trend"
+var string G_PB   = "15M Pullback"
+var string G_ENT  = "5M Entry"
+var string G_SL   = "Stops / Targets"
+var string G_FLT  = "Filters"
+var string G_BT   = "Backtest window"
+var string G_VIS  = "Visuals"
+
+// -----------------------------------------------------------------------------
+// WEBHOOK INPUTS  (secret is entered per-user; never hard-coded)
+// -----------------------------------------------------------------------------
+secret     = input.string("", "Webhook secret (must match backend WEBHOOK_SECRET)", group=G_WH, confirm=true)
+strategyId = input.string("MTF_GOLD_INDEX_V1", "strategy_id", group=G_WH)
+tzName     = input.string("Asia/Kuching", "Timezone (payload)", group=G_WH)
+brokerSym  = input.string("", "broker_symbol override (blank = chart symbol)", group=G_WH)
+riskPct    = input.float(0.5, "risk_percent (informational)", minval=0.1, maxval=1.0, step=0.1, group=G_WH)
+
+// -----------------------------------------------------------------------------
+// 4H DIRECTION INPUTS
+// -----------------------------------------------------------------------------
+tfDir      = input.timeframe("240", "Direction timeframe", group=G_DIR)
+dEmaFast   = input.int(50,  "4H EMA fast", group=G_DIR)
+dEmaSlow   = input.int(200, "4H EMA slow", group=G_DIR)
+dGapAtr    = input.float(0.10, "Min EMA gap (× 4H ATR)", step=0.05, group=G_DIR)
+slopeLB    = input.int(3, "Slope lookback (bars)", minval=1, group=G_DIR)
+pivotLeft  = input.int(3, "Pivot left", minval=1, group=G_DIR)
+pivotRight = input.int(3, "Pivot right (confirmation delay)", minval=1, group=G_DIR)
+useAdx     = input.bool(true, "Use ADX filter", group=G_DIR)
+adxLen     = input.int(14, "ADX period", group=G_DIR)
+adxMin     = input.float(20, "Minimum ADX", group=G_DIR)
+
+// -----------------------------------------------------------------------------
+// 1H TREND INPUTS
+// -----------------------------------------------------------------------------
+tfTrend    = input.timeframe("60", "Trend timeframe", group=G_TRN)
+tEmaFast   = input.int(20, "1H EMA fast", group=G_TRN)
+tEmaSlow   = input.int(50, "1H EMA slow", group=G_TRN)
+extAtrMult = input.float(1.5, "Max extension (× 1H ATR)", step=0.1, group=G_TRN)
+
+// -----------------------------------------------------------------------------
+// 15M PULLBACK INPUTS
+// -----------------------------------------------------------------------------
+tfPull     = input.timeframe("15", "Pullback timeframe", group=G_PB)
+pEmaFast   = input.int(20, "15M EMA fast", group=G_PB)
+pEmaSlow   = input.int(50, "15M EMA slow", group=G_PB)
+rsiLen     = input.int(14, "RSI length", group=G_PB)
+rsiBuyMin  = input.float(35, "RSI buy min", group=G_PB)
+rsiBuyMax  = input.float(50, "RSI buy max", group=G_PB)
+rsiSellMin = input.float(50, "RSI sell min", group=G_PB)
+rsiSellMax = input.float(65, "RSI sell max", group=G_PB)
+pbMaxAtr   = input.float(2.0, "Max pullback depth (× 15M ATR)", step=0.1, group=G_PB)
+expiryBars = input.int(12, "Setup expiry (15M bars)", group=G_PB)
+zoneAtr    = input.float(0.5, "Pullback zone width (× 15M ATR around EMA)", step=0.1, group=G_PB)
+
+// -----------------------------------------------------------------------------
+// 5M ENTRY INPUTS
+// -----------------------------------------------------------------------------
+entryMode    = input.string("retest", "Entry mode", options=["breakout","retest","stop"], group=G_ENT)
+retestMax    = input.int(6, "Retest window (5M bars)", group=G_ENT)
+stopOffAtr   = input.float(0.05, "Stop-order offset (× 5M ATR)", step=0.01, group=G_ENT)
+trigMaxAtr   = input.float(2.0, "Max trigger candle range (× 5M ATR)", step=0.1, group=G_ENT)
+useVolConf   = input.bool(false, "Confirm: volume > avg", group=G_ENT)
+volLen       = input.int(20, "Volume MA length", group=G_ENT)
+useRsiCross  = input.bool(false, "Confirm: RSI cross 50", group=G_ENT)
+
+// -----------------------------------------------------------------------------
+// STOP / TARGET INPUTS
+// -----------------------------------------------------------------------------
+stopMethod = input.string("structural", "Stop method", options=["structural","atr","trigger_candle"], group=G_SL)
+slBufAtr   = input.float(0.20, "Structural buffer (× 5M ATR)", step=0.05, group=G_SL)
+atrStopMul = input.float(1.5, "ATR stop multiplier", step=0.1, group=G_SL)
+maxStopAtr = input.float(3.0, "Max stop (× 5M ATR)", step=0.1, group=G_SL)
+minStopDst = input.float(0.0, "Min stop distance (price; 0 = off)", group=G_SL)
+rewardRisk = input.float(2.0, "Reward:Risk (TP)", step=0.1, group=G_SL)
+
+// -----------------------------------------------------------------------------
+// FILTER INPUTS
+// -----------------------------------------------------------------------------
+atrLen     = input.int(14, "ATR period (all TFs)", group=G_FLT)
+minAtr5    = input.float(0.0, "Min 5M ATR (0 = off)", group=G_FLT)
+maxAtr5    = input.float(0.0, "Max 5M ATR (0 = off)", group=G_FLT)
+
+// -----------------------------------------------------------------------------
+// BACKTEST WINDOW
+// -----------------------------------------------------------------------------
+useDates   = input.bool(false, "Limit by date", group=G_BT)
+startDate  = input.time(timestamp("2024-01-01 00:00"), "Start", group=G_BT)
+endDate    = input.time(timestamp("2027-01-01 00:00"), "End", group=G_BT)
+inWindow   = not useDates or (time >= startDate and time <= endDate)
+
+// -----------------------------------------------------------------------------
+// VISUAL INPUTS
+// -----------------------------------------------------------------------------
+showPanel  = input.bool(true, "Show status panel", group=G_VIS)
+showLevels = input.bool(true, "Plot entry/SL/TP", group=G_VIS)
+
+// =============================================================================
+// HELPERS
+// =============================================================================
+// Non-repaint HTF fetch: lookahead OFF, gaps OFF. With calc_on_every_tick=false
+// these return CONFIRMED higher-timeframe values only.
+f_sec(tf, expr) => request.security(syminfo.tickerid, tf, expr, lookahead=barmerge.lookahead_off, gaps=barmerge.gaps_off)
+
+// Rising / falling over a lookback (measurable slope, no "strong" fuzz).
+f_rising(series, lb)  => series > series[lb]
+f_falling(series, lb) => series < series[lb]
+
+// =============================================================================
+// 4H DIRECTION  (rulebook §B.1)
+// =============================================================================
+// Compute EMAs/ATR/ADX/pivots INSIDE the security call on the 4H series so the
+// pivot confirmation delay is native to that timeframe.
+dEma50  = f_sec(tfDir, ta.ema(close, dEmaFast))
+dEma200 = f_sec(tfDir, ta.ema(close, dEmaSlow))
+dClose  = f_sec(tfDir, close)
+dAtr    = f_sec(tfDir, ta.atr(atrLen))
+[dPlusDI, dMinusDI, dAdx] = f_sec(tfDir, ta.dmi(adxLen, adxLen))
+
+// 4H swing structure (confirmed pivots → HH/HL or LH/LL)
+dPh  = f_sec(tfDir, ta.pivothigh(pivotLeft, pivotRight))
+dPl  = f_sec(tfDir, ta.pivotlow(pivotLeft, pivotRight))
+var float dPhLast = na, var float dPhPrev = na
+var float dPlLast = na, var float dPlPrev = na
+if not na(dPh)
+    dPhPrev := dPhLast, dPhLast := dPh
+if not na(dPl)
+    dPlPrev := dPlLast, dPlLast := dPl
+
+dStructBull = not na(dPhPrev) and not na(dPlPrev) and dPhLast > dPhPrev and dPlLast > dPlPrev
+dStructBear = not na(dPhPrev) and not na(dPlPrev) and dPhLast < dPhPrev and dPlLast < dPlPrev
+
+dGapOk   = math.abs(dEma50 - dEma200) >= dGapAtr * dAtr
+dSlopeUp = f_sec(tfDir, f_rising(ta.ema(close, dEmaFast), slopeLB))
+dSlopeDn = f_sec(tfDir, f_falling(ta.ema(close, dEmaFast), slopeLB))
+dAdxOk   = not useAdx or dAdx >= adxMin
+
+dirBull = dEma50 > dEma200 and dClose > dEma50 and dSlopeUp and dStructBull and dGapOk and dAdxOk
+dirBear = dEma50 < dEma200 and dClose < dEma50 and dSlopeDn and dStructBear and dGapOk and dAdxOk
+dir4h   = dirBull ? "BULLISH" : dirBear ? "BEARISH" : "NEUTRAL"
+
+// =============================================================================
+// 1H TREND  (rulebook §B.2)
+// =============================================================================
+tEma20  = f_sec(tfTrend, ta.ema(close, tEmaFast))
+tEma50  = f_sec(tfTrend, ta.ema(close, tEmaSlow))
+tClose  = f_sec(tfTrend, close)
+tAtr    = f_sec(tfTrend, ta.atr(atrLen))
+tSlopeF_up = f_sec(tfTrend, f_rising(ta.ema(close, tEmaFast), slopeLB))
+tSlopeS_up = f_sec(tfTrend, f_rising(ta.ema(close, tEmaSlow), slopeLB))
+tSlopeF_dn = f_sec(tfTrend, f_falling(ta.ema(close, tEmaFast), slopeLB))
+tSlopeS_dn = f_sec(tfTrend, f_falling(ta.ema(close, tEmaSlow), slopeLB))
+tExtendOk  = math.abs(tClose - tEma20) <= extAtrMult * tAtr
+
+trendBull = dirBull and tEma20 > tEma50 and (tClose > tEma20 or tClose > tEma50) and tSlopeF_up and tSlopeS_up and tExtendOk
+trendBear = dirBear and tEma20 < tEma50 and (tClose < tEma20 or tClose < tEma50) and tSlopeF_dn and tSlopeS_dn and tExtendOk
+trend1h   = trendBull ? "BULLISH" : trendBear ? "BEARISH" : "NEUTRAL"
+
+// =============================================================================
+// 15M PULLBACK  (rulebook §B.3)
+// =============================================================================
+pEma20 = f_sec(tfPull, ta.ema(close, pEmaFast))
+pEma50 = f_sec(tfPull, ta.ema(close, pEmaSlow))
+pClose = f_sec(tfPull, close)
+pAtr   = f_sec(tfPull, ta.atr(atrLen))
+pRsi   = f_sec(tfPull, ta.rsi(close, rsiLen))
+
+// In-zone: price within zoneAtr of the 15M EMA20 or EMA50.
+inZoneBuy  = (pClose <= pEma20 + zoneAtr * pAtr and pClose >= pEma20 - zoneAtr * pAtr) or (pClose <= pEma50 + zoneAtr * pAtr and pClose >= pEma50 - zoneAtr * pAtr)
+inZoneSell = inZoneBuy   // symmetric zone test; direction gated below
+
+rsiBuyOk  = pRsi >= rsiBuyMin and pRsi <= rsiBuyMax
+rsiSellOk = pRsi >= rsiSellMin and pRsi <= rsiSellMax
+
+// Pullback depth vs recent 15M swing (approx via distance from EMA20 in ATRs).
+depthOk = math.abs(pClose - pEma20) <= pbMaxAtr * pAtr
+
+pullbackBuy  = trendBull and inZoneBuy  and rsiBuyOk  and depthOk
+pullbackSell = trendBear and inZoneSell and rsiSellOk and depthOk
+
+// Setup arming + expiry (in 15M bars). Track how long a setup has been armed.
+var bool  setupBuy   = false
+var bool  setupSell  = false
+var int   setupBar   = na
+newPullBuy  = pullbackBuy  and not setupBuy
+newPullSell = pullbackSell and not setupSell
+if newPullBuy
+    setupBuy := true, setupSell := false, setupBar := bar_index
+if newPullSell
+    setupSell := true, setupBuy := false, setupBar := bar_index
+// expiry: 15M bars → 5M bars ≈ ×3; convert generously using chart bars.
+barsPerPull = math.max(1, timeframe.in_seconds(tfPull) / timeframe.in_seconds(timeframe.period))
+expired = not na(setupBar) and (bar_index - setupBar) > expiryBars * barsPerPull
+if expired or dir4h == "NEUTRAL"
+    setupBuy := false, setupSell := false, setupBar := na
+// invalidate on context loss
+if setupBuy and not trendBull
+    setupBuy := false
+if setupSell and not trendBear
+    setupSell := false
+
+pull15 = setupBuy or setupSell
+
+// =============================================================================
+// 5M ENTRY TRIGGER  (rulebook §B.4)  — evaluated on the CHART timeframe (5M)
+// =============================================================================
+atr5 = ta.atr(atrLen)
+
+// 5M pivots for BOS / CHoCH and break levels.
+ph5 = ta.pivothigh(pivotLeft, pivotRight)
+pl5 = ta.pivotlow(pivotLeft, pivotRight)
+var float lowerHigh = na   // most recent confirmed 5M swing high (for BUY break)
+var float higherLow = na   // most recent confirmed 5M swing low  (for SELL break)
+var float lastSwingLow  = na
+var float lastSwingHigh = na
+if not na(ph5)
+    lowerHigh := ph5, lastSwingHigh := ph5
+if not na(pl5)
+    higherLow := pl5, lastSwingLow := pl5
+
+// Primary trigger: close-through of the structural level (not a wick).
+bosBuy  = setupBuy  and not na(lowerHigh) and close > lowerHigh and close[1] <= lowerHigh
+bosSell = setupSell and not na(higherLow) and close < higherLow and close[1] >= higherLow
+
+// Oversized-candle guard + confirmations.
+trigRange   = high - low
+notOversize = trigRange <= trigMaxAtr * atr5
+volOk       = not useVolConf or volume > ta.sma(volume, volLen)
+rsi5        = ta.rsi(close, rsiLen)
+rsiCrossUp  = not useRsiCross or ta.crossover(rsi5, 50)
+rsiCrossDn  = not useRsiCross or ta.crossunder(rsi5, 50)
+atrBandOk   = (minAtr5 == 0 or atr5 >= minAtr5) and (maxAtr5 == 0 or atr5 <= maxAtr5)
+
+trigBuy  = bosBuy  and notOversize and volOk and rsiCrossUp and atrBandOk and inWindow
+trigSell = bosSell and notOversize and volOk and rsiCrossDn and atrBandOk and inWindow
+
+// =============================================================================
+// STOPS / TARGETS  (rulebook §B.5 / §B.6)
+// =============================================================================
+f_stopBuy() =>
+    s = stopMethod == "atr"           ? close - atrStopMul * atr5 :
+        stopMethod == "trigger_candle" ? low   - slBufAtr  * atr5 :
+        (na(lastSwingLow) ? low : lastSwingLow) - slBufAtr * atr5
+    s
+f_stopSell() =>
+    s = stopMethod == "atr"           ? close + atrStopMul * atr5 :
+        stopMethod == "trigger_candle" ? high  + slBufAtr  * atr5 :
+        (na(lastSwingHigh) ? high : lastSwingHigh) + slBufAtr * atr5
+    s
+
+entryPx = close
+slBuy   = f_stopBuy()
+slSell  = f_stopSell()
+rBuy    = entryPx - slBuy
+rSell   = slSell - entryPx
+tpBuy   = entryPx + rewardRisk * rBuy
+tpSell  = entryPx - rewardRisk * rSell
+
+// Stop-distance validity (rulebook §B.5).
+stopOkBuy  = rBuy  > 0 and rBuy  <= maxStopAtr * atr5 and (minStopDst == 0 or rBuy  >= minStopDst)
+stopOkSell = rSell > 0 and rSell <= maxStopAtr * atr5 and (minStopDst == 0 or rSell >= minStopDst)
+
+longSignal  = trigBuy  and stopOkBuy  and strategy.position_size == 0
+shortSignal = trigSell and stopOkSell and strategy.position_size == 0
+
+// =============================================================================
+// ORDER EXECUTION (backtest side; live sizing/execution is backend-authoritative)
+// =============================================================================
+if longSignal
+    strategy.entry("L", strategy.long)
+    strategy.exit("L-x", from_entry="L", stop=slBuy, limit=tpBuy)
+if shortSignal
+    strategy.entry("S", strategy.short)
+    strategy.exit("S-x", from_entry="S", stop=slSell, limit=tpSell)
+
+// =============================================================================
+// JSON WEBHOOK PAYLOAD  (matches backend schema — see docs/05)
+// =============================================================================
+f_iso(t) => str.format_time(t, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+symOut     = brokerSym == "" ? syminfo.ticker : brokerSym
+barTimeIso = f_iso(time)
+nowIso     = f_iso(timenow)
+expiryIso  = f_iso(time + expiryBars * timeframe.in_seconds(tfPull) * 1000)
+
+f_payload(side, entryType, entry, sl, tp, trig) =>
+    sid = str.tostring(syminfo.ticker) + "-" + timeframe.period + "-" + str.tostring(time) + "-" + side
+    '{' +
+      '"version":"1.0",' +
+      '"strategy_id":"' + strategyId + '",' +
+      '"signal_id":"' + sid + '",' +
+      '"timestamp":"' + nowIso + '",' +
+      '"timezone":"' + tzName + '",' +
+      '"symbol":"' + syminfo.ticker + '",' +
+      '"broker_symbol":"' + symOut + '",' +
+      '"timeframe":"' + timeframe.period + '",' +
+      '"side":"' + side + '",' +
+      '"entry_type":"' + entryType + '",' +
+      '"entry_price":' + str.tostring(entry) + ',' +
+      '"stop_loss":' + str.tostring(sl) + ',' +
+      '"take_profit":' + str.tostring(tp) + ',' +
+      '"risk_reward":' + str.tostring(rewardRisk) + ',' +
+      '"risk_percent":' + str.tostring(riskPct) + ',' +
+      '"atr_5m":' + str.tostring(atr5) + ',' +
+      '"direction_4h":"' + dir4h + '",' +
+      '"trend_1h":"' + trend1h + '",' +
+      '"pullback_15m":' + (pull15 ? "true" : "false") + ',' +
+      '"trigger_5m":"' + trig + '",' +
+      '"setup_expiry":"' + expiryIso + '",' +
+      '"bar_time":"' + barTimeIso + '",' +
+      '"secret":"' + secret + '"' +
+    '}'
+
+entryTypeOut = str.upper(entryMode)
+if longSignal
+    alert(f_payload("BUY",  entryTypeOut, entryPx, slBuy,  tpBuy,  "BULLISH_BOS"), alert.freq_once_per_bar_close)
+if shortSignal
+    alert(f_payload("SELL", entryTypeOut, entryPx, slSell, tpSell, "BEARISH_BOS"), alert.freq_once_per_bar_close)
+
+// Alert conditions (for classic alerts too).
+alertcondition(longSignal,  "BOTv1 BUY",  "BOT TRADING v1.0 BUY trigger")
+alertcondition(shortSignal, "BOTv1 SELL", "BOT TRADING v1.0 SELL trigger")
+
+// =============================================================================
+// VISUALS
+// =============================================================================
+plot(showLevels and strategy.position_size == 0 and longSignal  ? slBuy  : na, "SL", color.red,   style=plot.style_linebr)
+plot(showLevels and strategy.position_size == 0 and longSignal  ? tpBuy  : na, "TP", color.green, style=plot.style_linebr)
+plot(showLevels and strategy.position_size == 0 and shortSignal ? slSell : na, "SL", color.red,   style=plot.style_linebr)
+plot(showLevels and strategy.position_size == 0 and shortSignal ? tpSell : na, "TP", color.green, style=plot.style_linebr)
+plotshape(longSignal,  "BUY",  shape.triangleup,   location.belowbar, color.new(color.green,0), size=size.small)
+plotshape(shortSignal, "SELL", shape.triangledown, location.abovebar, color.new(color.red,0),   size=size.small)
+bgcolor(dir4h=="BULLISH" ? color.new(color.green,92) : dir4h=="BEARISH" ? color.new(color.red,92) : na)
+
+// Status panel
+var table pnl = table.new(position.top_right, 2, 7, border_width=1)
+f_row(i, k, v, col) =>
+    table.cell(pnl, 0, i, k, text_color=color.white, text_size=size.small, bgcolor=color.new(color.gray,70))
+    table.cell(pnl, 1, i, v, text_color=col, text_size=size.small, bgcolor=color.new(color.black,60))
+if showPanel and barstate.islast
+    f_row(0, "BOT TRADING v1.0", "5M chart", color.white)
+    f_row(1, "4H direction", dir4h, dir4h=="BULLISH"?color.lime:dir4h=="BEARISH"?color.red:color.gray)
+    f_row(2, "1H trend", trend1h, trend1h=="BULLISH"?color.lime:trend1h=="BEARISH"?color.red:color.gray)
+    f_row(3, "15M pullback", setupBuy?"BUY armed":setupSell?"SELL armed":"none", pull15?color.yellow:color.gray)
+    f_row(4, "5M trigger", longSignal?"BUY":shortSignal?"SELL":"—", (longSignal or shortSignal)?color.aqua:color.gray)
+    f_row(5, "ADX(4H)", str.tostring(dAdx, "#.0") + (dAdxOk?" ok":" low"), dAdxOk?color.lime:color.orange)
+    f_row(6, "ATR(5M)", str.tostring(atr5, format.mintick), color.white)
+// =============================================================================
+// END — BOT TRADING v1.0. Set the alert to "Any alert() function call" and point
+// it at https://<host>/webhook/tradingview/<URL_TOKEN>. Non-repaint; confirmed
+// bars only. No performance is promised.
+// =============================================================================

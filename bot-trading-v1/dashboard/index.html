@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BOT TRADING v1.0 — Dashboard</title>
+<style>
+  :root{--bg:#0f1420;--card:#182031;--line:#26314a;--txt:#e6ebf5;--mut:#93a1bd;
+        --green:#2ecc71;--red:#e74c3c;--amber:#f1c40f;--blue:#4aa3ff}
+  @media (prefers-color-scheme: light){
+    :root{--bg:#f4f6fb;--card:#fff;--line:#e2e8f2;--txt:#16202f;--mut:#5b6b86}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--txt)}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+  h1{font-size:16px;margin:0;letter-spacing:.3px}
+  .pill{padding:3px 10px;border-radius:999px;font-weight:600;font-size:12px}
+  .live-on{background:var(--red);color:#fff;animation:pulse 1.4s infinite}
+  .live-off{background:#223;color:var(--green);border:1px solid var(--green)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+  .warn-banner{display:none;background:var(--red);color:#fff;text-align:center;padding:8px;font-weight:700}
+  main{max-width:1180px;margin:0 auto;padding:18px;display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);margin:0 0 10px}
+  .kv{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--line)}
+  .kv:last-child{border:0}
+  .kv b{font-variant-numeric:tabular-nums}
+  .wide{grid-column:1/-1}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase}
+  .tag{padding:1px 7px;border-radius:6px;font-size:11px;font-weight:600}
+  .t-accepted{background:rgba(46,204,113,.18);color:var(--green)}
+  .t-rejected{background:rgba(231,76,60,.18);color:var(--red)}
+  .t-buy{color:var(--green)} .t-sell{color:var(--red)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  input,button{font:inherit;border-radius:8px;border:1px solid var(--line);padding:7px 11px;background:var(--bg);color:var(--txt)}
+  button{cursor:pointer;font-weight:600}
+  button.danger{background:var(--red);color:#fff;border-color:var(--red)}
+  button.warn{background:var(--amber);color:#111;border-color:var(--amber)}
+  button.ok{background:var(--green);color:#062;border-color:var(--green)}
+  .muted{color:var(--mut)} .scroll{overflow-x:auto}
+  footer{max-width:1180px;margin:0 auto;padding:8px 18px 28px;color:var(--mut);font-size:12px}
+</style>
+</head>
+<body>
+<div class="warn-banner" id="liveWarn">⚠ LIVE TRADING ENABLED — real orders may be placed</div>
+<header>
+  <h1>BOT&nbsp;TRADING&nbsp;v1.0 <span class="muted">— dashboard</span></h1>
+  <div class="controls">
+    <span id="statePill" class="pill live-off">…</span>
+    <span id="envPill" class="pill live-off">…</span>
+    <span id="livePill" class="pill live-off">LIVE?</span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Bot status</h2>
+    <div class="kv"><span>State</span><b id="s-state">—</b></div>
+    <div class="kv"><span>Environment</span><b id="s-env">—</b></div>
+    <div class="kv"><span>Live trading</span><b id="s-live">—</b></div>
+    <div class="kv"><span>Broker</span><b id="s-broker">—</b></div>
+    <div class="kv"><span>Auth mode</span><b id="s-auth">—</b></div>
+    <div class="kv"><span>News filter</span><b id="s-news">—</b></div>
+  </section>
+
+  <section class="card">
+    <h2>Risk status <span class="muted" id="riskLocked"></span></h2>
+    <div class="kv"><span>Equity</span><b id="r-equity">—</b></div>
+    <div class="kv"><span>Open risk %</span><b id="r-open">—</b></div>
+    <div class="kv"><span>Trades today</span><b id="r-trades">—</b></div>
+    <div class="kv"><span>Losing today</span><b id="r-losing">—</b></div>
+    <div class="kv"><span>Consec. losses</span><b id="r-consec">—</b></div>
+    <div class="kv"><span>Daily P/L</span><b id="r-daily">—</b></div>
+    <div class="kv"><span>Weekly P/L</span><b id="r-weekly">—</b></div>
+  </section>
+
+  <section class="card">
+    <h2>Controls (admin)</h2>
+    <div class="controls" style="margin-bottom:10px">
+      <input id="adminToken" type="password" placeholder="admin bearer token" style="flex:1;min-width:140px" />
+    </div>
+    <div class="controls">
+      <button class="warn"  onclick="admin('pause')">Pause</button>
+      <button class="ok"    onclick="admin('resume')">Resume</button>
+      <button class="danger" onclick="if(confirm('KILL SWITCH: force EMERGENCY_STOP?'))admin('kill-switch')">Kill switch</button>
+    </div>
+    <p class="muted" id="adminMsg" style="margin:10px 0 0"></p>
+  </section>
+
+  <section class="card wide">
+    <h2>Open positions</h2>
+    <div class="scroll"><table id="posTable">
+      <thead><tr><th>Symbol</th><th>Side</th><th>Size</th><th>Entry</th><th>Stop</th><th>Risk %</th></tr></thead>
+      <tbody><tr><td colspan="6" class="muted">loading…</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section class="card wide">
+    <h2>Latest signals &amp; rejections</h2>
+    <div class="scroll"><table id="sigTable">
+      <thead><tr><th>Time</th><th>Symbol</th><th>Side</th><th>Status</th><th>Reason</th></tr></thead>
+      <tbody><tr><td colspan="5" class="muted">loading…</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section class="card wide">
+    <h2>Recent trades</h2>
+    <div class="scroll"><table id="tradeTable">
+      <thead><tr><th>Time</th><th>Symbol</th><th>Side</th><th>Size</th><th>Entry</th><th>Stop</th><th>TP</th><th>Env</th><th>Status</th></tr></thead>
+      <tbody><tr><td colspan="9" class="muted">loading…</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section class="card wide">
+    <h2>Notifications</h2>
+    <div class="scroll"><table id="notifTable">
+      <thead><tr><th>Event</th><th>Message</th></tr></thead>
+      <tbody><tr><td colspan="2" class="muted">loading…</td></tr></tbody>
+    </table></div>
+  </section>
+</main>
+
+<footer>
+  Paper mode by default · live disabled by default. Algorithmic trading involves substantial
+  financial risk; backtested/simulated performance does not guarantee future results. Test
+  independently before real-money deployment. This tool makes no profitability claims.
+</footer>
+
+<script>
+const API = location.origin;              // dashboard is served by the same API
+const $ = id => document.getElementById(id);
+const fmt = n => (n===null||n===undefined)?'—':(typeof n==='number'?n.toLocaleString(undefined,{maximumFractionDigits:4}):n);
+
+async function getJSON(path, opts){ const r = await fetch(API+path, opts); if(!r.ok) throw new Error(r.status); return r.json(); }
+
+async function refresh(){
+  try{
+    const h = await getJSON('/health');
+    $('s-state').textContent=h.state; $('s-env').textContent=h.environment;
+    $('s-live').textContent=h.live_enabled?'ENABLED':'disabled';
+    $('s-broker').textContent=h.broker; $('s-auth').textContent=h.auth_mode; $('s-news').textContent=h.news_filter;
+    $('statePill').textContent=h.state; $('envPill').textContent=h.environment;
+    const lp=$('livePill'); lp.textContent = h.live_enabled?'LIVE ON':'LIVE OFF';
+    lp.className='pill '+(h.live_enabled?'live-on':'live-off');
+    $('liveWarn').style.display = h.live_enabled?'block':'none';
+  }catch(e){ $('statePill').textContent='API offline'; }
+
+  try{
+    const p = await getJSON('/positions');
+    $('posTable').querySelector('tbody').innerHTML = p.length? p.map(x=>
+      `<tr><td>${x.symbol}</td><td class="t-${x.side.toLowerCase()}">${x.side}</td><td>${fmt(x.size)}</td>
+       <td>${fmt(x.entry)}</td><td>${fmt(x.stop)}</td><td>${fmt(x.open_risk_percent)}</td></tr>`).join('')
+      : '<tr><td colspan="6" class="muted">no open positions</td></tr>';
+  }catch(e){}
+
+  try{
+    const s = await getJSON('/signals?limit=25');
+    const rows = (s.recent||[]);
+    $('sigTable').querySelector('tbody').innerHTML = rows.length? rows.map(x=>
+      `<tr><td class="muted">${(x.at||'').slice(11,19)}</td><td>${x.symbol}</td>
+       <td class="t-${(x.side||'').toLowerCase()}">${x.side}</td>
+       <td><span class="tag ${x.status==='accepted'?'t-accepted':'t-rejected'}">${x.status}</span></td>
+       <td class="muted">${x.reason||''}</td></tr>`).join('')
+      : '<tr><td colspan="5" class="muted">no signals yet</td></tr>';
+  }catch(e){}
+
+  try{
+    const t = await getJSON('/trades?limit=25');
+    const rows = (t.recent||[]);
+    $('tradeTable').querySelector('tbody').innerHTML = rows.length? rows.map(x=>
+      `<tr><td class="muted">${(x.at||'').slice(11,19)}</td><td>${x.symbol}</td>
+       <td class="t-${(x.side||'').toLowerCase()}">${x.side}</td><td>${fmt(x.size)}</td>
+       <td>${fmt(x.entry_price)}</td><td>${fmt(x.stop_loss)}</td><td>${fmt(x.take_profit)}</td>
+       <td>${x.environment}</td><td>${x.status}</td></tr>`).join('')
+      : '<tr><td colspan="9" class="muted">no trades yet</td></tr>';
+  }catch(e){}
+
+  try{
+    const nt = await getJSON('/notifications?limit=25');
+    const rows = (nt.recent||[]);
+    $('notifTable').querySelector('tbody').innerHTML = rows.length? rows.map(x=>
+      `<tr><td><span class="tag ${x.event==='kill_switch'||x.event==='order_rejected'||x.event==='risk_limit'?'t-rejected':'t-accepted'}">${x.event}</span></td>
+       <td class="muted">${x.message||''}</td></tr>`).join('')
+      : '<tr><td colspan="2" class="muted">no notifications</td></tr>';
+  }catch(e){}
+
+  const token = $('adminToken').value.trim();
+  if(token){
+    try{
+      const r = await getJSON('/admin/risk-status', {headers:{Authorization:'Bearer '+token}});
+      $('r-equity').textContent=fmt(r.equity); $('r-open').textContent=fmt(r.open_risk_percent);
+      $('r-trades').textContent=r.trades_today; $('r-losing').textContent=r.losing_trades_today;
+      $('r-consec').textContent=r.consecutive_losses;
+      $('r-daily').textContent=fmt(r.daily_pnl); $('r-weekly').textContent=fmt(r.weekly_pnl);
+      $('riskLocked').textContent = r.state==='RISK_LOCKED'?'· LOCKED':'';
+    }catch(e){ /* token wrong or not entered */ }
+  }
+}
+
+async function admin(action){
+  const token = $('adminToken').value.trim();
+  if(!token){ $('adminMsg').textContent='Enter the admin token first.'; return; }
+  try{
+    const r = await fetch(API+'/admin/'+action, {method:'POST', headers:{Authorization:'Bearer '+token}});
+    const j = await r.json();
+    $('adminMsg').textContent = r.ok ? (action+' → state '+(j.state||'')) : ('failed: '+(j.detail||r.status));
+    refresh();
+  }catch(e){ $('adminMsg').textContent='request failed'; }
+}
+
+refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>
