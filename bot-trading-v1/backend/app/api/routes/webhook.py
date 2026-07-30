@@ -140,7 +140,7 @@ async def tradingview(url_token: str, request: Request,
         rt.managed[result.position_id] = ManagedPosition(
             position_id=result.position_id, side=sig.side, entry=sig.entry_price,
             initial_stop=sig.stop_loss, current_stop=sig.stop_loss,
-            size=decision.order_intent.lots)
+            size=decision.order_intent.lots, atr=sig.atr_5m)
         _notify(rt, "order_placed",
                 f"{sig.symbol} {sig.side.value} {decision.order_intent.lots} lots @ "
                 f"{sig.entry_price} SL {sig.stop_loss} TP {sig.take_profit}")

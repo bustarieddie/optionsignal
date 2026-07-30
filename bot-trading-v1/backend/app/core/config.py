@@ -47,6 +47,10 @@ class Settings:
     # --- news feed (optional; blank => honest 'unavailable') ---
     news_calendar_file: str = field(default_factory=lambda: os.environ.get("NEWS_CALENDAR_FILE", ""))
 
+    # --- background scheduler (opt-in) ---
+    scheduler_enabled: bool = field(default_factory=lambda: _env_bool("SCHEDULER_ENABLED", False))
+    scheduler_interval: int = field(default_factory=lambda: int(os.environ.get("SCHEDULER_INTERVAL", "15")))
+
     # --- live broker selection ---
     broker_kind: str = field(default_factory=lambda: os.environ.get("BROKER_KIND", "paper"))
     broker_api_token: str = field(default_factory=lambda: os.environ.get("BROKER_API_TOKEN", ""))

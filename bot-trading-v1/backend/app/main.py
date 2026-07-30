@@ -34,10 +34,23 @@ async def lifespan(app: FastAPI):
         init_db()
     except Exception as e:  # pragma: no cover
         log_event(log, "db init skipped", error=str(e))
+
+    # Opt-in background management/daily-reset loop (SCHEDULER_ENABLED=true).
+    task = None
+    if rt.settings.scheduler_enabled:  # pragma: no cover - background task
+        import asyncio
+
+        from app.services.scheduler import management_loop
+        task = asyncio.create_task(management_loop(app, rt.settings.scheduler_interval))
+        log_event(log, "scheduler started", interval=rt.settings.scheduler_interval)
+
     log_event(log, "startup", environment=rt.settings.environment,
               live_enabled=rt.live_enabled(), state=rt.sm.state.value,
-              auth_mode=rt.settings.auth_mode(), safety=SAFETY_BANNER)
+              auth_mode=rt.settings.auth_mode(), scheduler=rt.settings.scheduler_enabled,
+              safety=SAFETY_BANNER)
     yield
+    if task is not None:  # pragma: no cover
+        task.cancel()
     log_event(log, "shutdown")
 
 

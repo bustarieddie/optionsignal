@@ -111,6 +111,34 @@ async def manage_tick(request: Request, symbol: str, price: float, atr: float = 
             "correlation_id": _audit(rt, "manage_tick", symbol=symbol, price=price)}
 
 
+@router.post("/run-management")
+async def run_management(request: Request, advance_bar: bool = False,
+                         authorization: str | None = Header(default=None)):
+    """Run the management cycle across ALL tracked positions using live broker
+    prices (rulebook §9). Same work the background scheduler does per tick."""
+    rt = _require_admin(request, authorization)
+    from app.services.scheduler import run_management_cycle
+    results = run_management_cycle(rt, advance_bar=advance_bar)
+    return {"results": results, "correlation_id": _audit(rt, "run_management")}
+
+
+@router.post("/daily-summary")
+async def daily_summary(request: Request, authorization: str | None = Header(default=None)):
+    rt = _require_admin(request, authorization)
+    from app.services.scheduler import build_daily_summary
+    return {"summary": build_daily_summary(rt), "correlation_id": _audit(rt, "daily_summary")}
+
+
+@router.post("/daily-reset")
+async def daily_reset_endpoint(request: Request, authorization: str | None = Header(default=None)):
+    """Manually perform the daily reset (§11). Normally the scheduler does this at
+    the tz day boundary; exposed for ops/testing."""
+    rt = _require_admin(request, authorization)
+    from app.services.scheduler import daily_reset
+    daily_reset(rt)
+    return {"state": rt.sm.state.value, "correlation_id": _audit(rt, "daily_reset")}
+
+
 @router.get("/risk-status")
 async def risk_status(request: Request, authorization: str | None = Header(default=None)):
     rt = _require_admin(request, authorization)

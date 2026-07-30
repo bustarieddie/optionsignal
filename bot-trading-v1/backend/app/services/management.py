@@ -81,6 +81,7 @@ class ManagedPosition:
     initial_stop: float          # stop at entry — defines 1R
     current_stop: float
     size: float                  # original size
+    atr: float = 0.0             # 5M ATR at entry — proxy for auto-trailing
     partial_taken: bool = False
     breakeven_done: bool = False
     trail_active: bool = False

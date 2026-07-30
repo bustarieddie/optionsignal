@@ -217,6 +217,31 @@ integration test. **Total suite: 122 passing.**
 
 ---
 
+## Follow-up 4 — Background scheduler + daily reset + daily summary ✅
+
+**Files:** `services/scheduler.py`, opt-in async loop in `main.py` lifespan,
+admin endpoints `/admin/run-management`, `/admin/daily-summary`, `/admin/daily-reset`.
+
+- **Auto-management** — `run_management_cycle` fetches each tracked position's live
+  broker price and runs the §9 planner (breakeven/partial/trailing), using the entry
+  5M ATR as the trailing proxy. It also **reaps positions the broker already closed**
+  (protective SL/TP hit) and syncs local risk state.
+- **Daily reset (§11)** — `daily_reset` clears daily counters + `seen_candles` and
+  **lifts a daily RISK_LOCK back to READY** (this was previously only documented).
+- **Daily summary (§24)** — `build_daily_summary` composes and dispatches the digest.
+- **`management_loop`** — an opt-in (`SCHEDULER_ENABLED=true`) async timer in the
+  app lifespan that runs the cycle every `SCHEDULER_INTERVAL`s and performs the
+  reset + summary when the `timezone` day rolls over (`current_day_key` is tz-aware).
+
+**Tests added (6):** `test_scheduler.py` — trailing via cycle, broker-closed cleanup,
+daily reset clears counters + lifts lock, no-lock stays, summary notifies, tz-aware
+day key. **Total suite: 128 passing.**
+
+> The management engine now runs automatically when the scheduler is enabled;
+> `/admin/manage-tick` and `/admin/run-management` remain for manual/scheduled drives.
+
+---
+
 ## Safety posture (all phases)
 
 Paper mode default · live disabled by default · global kill-switch · per-symbol
