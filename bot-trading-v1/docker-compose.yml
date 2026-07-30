@@ -8,6 +8,14 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://botuser:botpass@db:5432/botdb
       REDIS_URL: redis://redis:6379/0
+    # The backend image only contains ./backend. The config presets and the
+    # dashboard live one level up, so mount them read-only at the paths the app
+    # resolves at runtime (/config and /dashboard). Also lets you tweak config
+    # or dashboard without rebuilding the image.
+    volumes:
+      - ./config:/config:ro
+      - ./dashboard:/dashboard:ro
+    restart: unless-stopped
     ports:
       - "8000:8000"
     depends_on:
@@ -18,6 +26,7 @@ services:
 
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: botuser
       POSTGRES_PASSWORD: botpass
@@ -32,6 +41,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
